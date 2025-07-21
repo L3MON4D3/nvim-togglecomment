@@ -1,7 +1,7 @@
 local M = {}
 local data = require("togglecomment.session.data")
 local unicode_symbols = require("togglecomment.unicode_symbols")
-local LinecommentDef = require("togglecomment.prefixcomment").LinecommentDef
+local LinecommentDef = require("togglecomment.linecomment").LinecommentDef
 
 local default_config = {
 	linecomment = {

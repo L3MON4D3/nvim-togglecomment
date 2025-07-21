@@ -1,7 +1,7 @@
 local util = require("togglecomment.util")
 local contiguous_linerange = require("togglecomment.contiguous_linerange")
 local range_selectors = require("togglecomment.range_selectors")
-local LineCommentType = require("togglecomment.prefixcomment").LineCommentType
+local LineCommentType = require("togglecomment.linecomment").LineCommentType
 local data = require("togglecomment.session.data")
 
 -- return range from, to-inclusive.
