@@ -1,0 +1,3 @@
+return {
+	linecomment_defs = {}
+}
