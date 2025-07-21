@@ -5,10 +5,10 @@ local LineCommentType = require("togglecomment.linecomment").LineCommentType
 local data = require("togglecomment.session.data")
 
 -- return range from, to-inclusive.
-local function get_linecomment_range(prefix_def, buffer_lines, linenr)
+local function get_linecomment_range(linecomment_def, buffer_lines, linenr)
 	buffer_lines = contiguous_linerange.new({center = linenr})
 
-	local pos_linetype = prefix_def:linetype(buffer_lines[linenr])
+	local pos_linetype = linecomment_def:linetype(buffer_lines[linenr])
 
 	if pos_linetype == LineCommentType.singleline then
 		return linenr, linenr
@@ -22,7 +22,7 @@ local function get_linecomment_range(prefix_def, buffer_lines, linenr)
 		if from_linenr == -1 then
 			return nil,nil
 		end
-		local from_linetype = prefix_def:linetype(buffer_lines[from_linenr])
+		local from_linetype = linecomment_def:linetype(buffer_lines[from_linenr])
 
 		if from_linetype == nil or from_linetype == LineCommentType.to or from_linetype == LineCommentType.singleline then
 			-- line is not a connecting line, and we have not reached the
@@ -39,7 +39,7 @@ local function get_linecomment_range(prefix_def, buffer_lines, linenr)
 		if to_linenr == buffer_lines.n_lines then
 			return nil,nil
 		end
-		local to_linetype = prefix_def:linetype(buffer_lines[to_linenr])
+		local to_linetype = linecomment_def:linetype(buffer_lines[to_linenr])
 
 		if to_linetype == nil or to_linetype == LineCommentType.from or to_linetype == LineCommentType.singleline then
 			return nil,nil
@@ -52,21 +52,21 @@ local function get_linecomment_range(prefix_def, buffer_lines, linenr)
 	return from_linenr, to_linenr
 end
 
-local function uncomment_line_range(prefix_def, buffer_lines, from, to)
+local function uncomment_line_range(linecomment_def, buffer_lines, from, to)
 	for i = from, to do
 		local first_non_space_col = buffer_lines[i]:find("[^%s]")
 		-- if nil, this is a blank line, which is completely valid.
 		if first_non_space_col then
 			first_non_space_col = first_non_space_col-1
-			vim.api.nvim_buf_set_text(0, i, first_non_space_col, i, first_non_space_col + prefix_def.prefix_len, {})
+			vim.api.nvim_buf_set_text(0, i, first_non_space_col, i, first_non_space_col + linecomment_def.prefix_len, {})
 		end
 	end
 end
 
-local function comment_line_range(prefix_def, buffer_lines, from, to)
-	local from_char = from == to and prefix_def.ssingleline or prefix_def.sfrom
+local function comment_line_range(linecomment_def, buffer_lines, from, to)
+	local from_char = from == to and linecomment_def.ssingleline or linecomment_def.sfrom
 	for i = from, to do
-		local comment_char = (i == from and from_char) or (i == to and prefix_def.sto) or prefix_def.sconnect
+		local comment_char = (i == from and from_char) or (i == to and linecomment_def.sto) or linecomment_def.sconnect
 		local first_non_space_col = buffer_lines[i]:find("[^%s]")
 		-- if nil, this is a blank line, which we will not comment.
 		if first_non_space_col then
