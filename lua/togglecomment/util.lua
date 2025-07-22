@@ -60,4 +60,48 @@ function M.range_includes_range(r1, r2)
 	return M.pos_cmp(s1, s2) <= 0 and M.pos_cmp(e2, e1) <= 0
 end
 
+-- code adapted from github:nvim/runtime/lua/vim/treesitter/query.lua
+function M.trim_node(node, bufnr)
+	local start_row, start_col, end_row, end_col = node:range()
+
+	local node_text = vim.split(vim.treesitter.get_node_text(node, bufnr), '\n')
+	if end_col == 0 then
+		-- get_node_text() will ignore the last line if the node ends at column 0
+		node_text[#node_text + 1] = ''
+	end
+
+	local end_idx = #node_text
+	local start_idx = 1
+
+	while end_idx > 0 and node_text[end_idx]:find('^%s*$') do
+		end_idx = end_idx - 1
+		end_row = end_row - 1
+		-- set the end position to the last column of the next line, or 0 if we just trimmed the
+		-- last line
+		end_col = end_idx > 0 and #node_text[end_idx] or 0
+	end
+	if end_idx == 0 then
+		end_row = start_row
+		end_col = start_col
+	else
+		local whitespace_start = node_text[end_idx]:find('(%s*)$')
+		end_col = (whitespace_start - 1) + (end_idx == 1 and start_col or 0)
+	end
+
+	while start_idx <= end_idx and node_text[start_idx]:find('^%s*$') do
+		start_idx = start_idx + 1
+		start_row = start_row + 1
+		start_col = 0
+	end
+	local _, whitespace_end = node_text[start_idx]:find('^(%s*)')
+	whitespace_end = whitespace_end or 0
+	start_col = (start_idx == 1 and start_col or 0) + whitespace_end
+
+	-- If this produces an invalid range, we just skip it.
+	if start_row < end_row or (start_row == end_row and start_col <= end_col) then
+		return {start_row, start_col, end_row, end_col}
+	end
+	return nil
+end
+
 return M

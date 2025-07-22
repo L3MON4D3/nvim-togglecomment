@@ -19,7 +19,7 @@ local function get_blockcomment_range(opts)
 		end
 
 		if node:type() == commentnode_type then
-			comment_range = {node:range()}
+			comment_range = util.trim_node(node, 0)
 			break
 		end
 		node = node:parent()
@@ -35,12 +35,12 @@ local function comment_block_range(range, opts)
 	local langtree = opts.langtree
 	local cursor_tree = langtree:tree_for_range(range, {ignore_injections = true})
 
-	local query = vim.treesitter.query.parse(langtree:lang(), ("(%s) @comment"):format(comment_def.commentnode_type))
+	local query = vim.treesitter.query.parse(langtree:lang(), ("((%s) @comment (#trim! @comment 1 1 1 1))"):format(comment_def.commentnode_type))
 
 	local comments_in_comment_range = {}
-	for _, match, _ in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do
-		-- we only have one pattern and one capture-node in that pattern :)
-		local node_range = {match[1][1]:range(false)}
+	for _, _, metadata in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do
+		-- only one pattern and one captured node, and we always trim, so metadata has the correct range.
+		local node_range = metadata[1].range
 		if util.range_includes_range(range, node_range) then
 			table.insert(comments_in_comment_range, node_range)
 		end
@@ -452,12 +452,18 @@ return function()
 
 			-- only find matches that include the cursor-line.
 			for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
+				-- prefer range set via metadata, it has to be set explicitly,
+				-- so probably only exists if there was some extra effort to enable it.
 				local node_range = metadata.togglecomment
 				if not node_range then
 					for id, nodes in pairs(match) do
 						local name = query.captures[id]
 						if name == "togglecomment" then
-							node_range = {nodes[1]:range(false)}
+							-- set this way by #trim!.
+							node_range = metadata[id].range
+							if not node_range then
+								node_range = {nodes[1]:range(false)}
+							end
 							break
 						end
 					end
