@@ -15,5 +15,12 @@ return {
 		hair_space = " ", -- U+200a
 		narrow_no_break_space = " ", -- U+202f
 		medium_mathematical_space = " ", -- U+205f
+		braille_blank = "⠀", -- U+2800
+	},
+	misc_symbols = {
+		mathematical_left_flattened_parenthesis = "⟮", -- U+27EE
+		mathematical_right_flattened_parenthesis = "⟯", -- U+27EF 
+		left_ceiling = "⌈", -- U+2308
+		right_floor = "⌋" -- U+230B
 	}
 }

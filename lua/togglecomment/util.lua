@@ -2,6 +2,10 @@ local M = {}
 
 function M.nop() end
 
+function M.id(x) return x end
+
+function M.yes() return true end
+
 function M.get_cursor_0ind(winid)
 	local c = vim.api.nvim_win_get_cursor(winid or 0)
 	c[1] = c[1] - 1

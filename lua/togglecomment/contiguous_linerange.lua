@@ -43,6 +43,8 @@ local LazyContiguousLinerange_mt = {__index = function(t, k)
 			rawset(t, i, lines[i - from + 1])
 		end
 		return t[k]
+	else
+		return LazyContiguousLinerange[k]
 	end
 end}
 
@@ -67,6 +69,18 @@ function LazyContiguousLinerange.new(opts)
 	o.fetched_range_to = to
 	o.n_lines = n_lines
 	return setmetatable(o, LazyContiguousLinerange_mt)
+end
+
+function LazyContiguousLinerange:get_text(range)
+	local text = {}
+	for i = range[1], range[3] do
+		table.insert(text, self[i])
+	end
+
+	text[#text] = text[#text]:sub(1, range[4])
+	text[1] = text[1]:sub(range[2]+1)
+
+	return text
 end
 
 M.new = LazyContiguousLinerange.new

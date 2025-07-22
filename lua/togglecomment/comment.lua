@@ -4,30 +4,109 @@ local range_selectors = require("togglecomment.range_selectors")
 local LineCommentType = require("togglecomment.linecomment").LineCommentType
 local data = require("togglecomment.session.data")
 
+local function get_blockcomment_range(opts)
+	local comment_def = opts.comment_def
+	local commentnode_type = comment_def.commentnode_type
+	local langtree = opts.langtree
+	local pos = opts.pos
+	local buffer_lines = opts.buffer_lines
+
+	local node = langtree:named_node_for_range({pos[1],pos[2],pos[1],pos[2]}, {ignore_injections = true})
+	local comment_range
+	while true do
+		if not node then
+			return nil
+		end
+
+		if node:type() == commentnode_type then
+			comment_range = {node:range()}
+			break
+		end
+		node = node:parent()
+	end
+
+	if comment_def:valid(buffer_lines, comment_range) then
+		return comment_range
+	end
+end
+
+local function comment_block_range(range, opts)
+	local comment_def = opts.comment_def
+	local langtree = opts.langtree
+	local cursor_tree = langtree:tree_for_range(range, {ignore_injections = true})
+
+	local query = vim.treesitter.query.parse(langtree:lang(), ("(%s) @comment"):format(comment_def.commentnode_type))
+
+	local comments_in_comment_range = {}
+	for _, match, _ in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do
+		-- we only have one pattern and one capture-node in that pattern :)
+		local node_range = {match[1][1]:range(false)}
+		if util.range_includes_range(range, node_range) then
+			table.insert(comments_in_comment_range, node_range)
+		end
+	end
+
+	-- these ranges cannot overlap, so we can sort them by comparing their row.
+	table.sort(comments_in_comment_range, function(a,b)
+		return a[1] < b[1]
+	end)
+
+	-- start inserting characters, back to front so we don't have to adjust
+	-- positions.
+	vim.api.nvim_buf_set_text(0, range[3], range[4], range[3], range[4], {comment_def.block_end})
+	for i = #comments_in_comment_range, 1, -1 do
+		local commentrange = comments_in_comment_range[i]
+		vim.api.nvim_buf_set_text(0, commentrange[3], commentrange[4]-#comment_def.block_end, commentrange[3], commentrange[4], {comment_def.placeholder_end})
+		vim.api.nvim_buf_set_text(0, commentrange[1], commentrange[2], commentrange[1], commentrange[2]+#comment_def.block_begin, {comment_def.placeholder_begin})
+	end
+	vim.api.nvim_buf_set_text(0, range[1], range[2], range[1], range[2], {comment_def.block_begin})
+end
+
+local function uncomment_block_range(range, opts)
+	local comment_def = opts.comment_def
+	local buffer_lines = opts.buffer_lines
+
+	local toplevel_placeholders = comment_def:toplevel_placeholders(buffer_lines, range)
+
+	-- again, back to front for correct offsets.
+
+	vim.api.nvim_buf_set_text(0, range[3], range[4]-#comment_def.block_end, range[3], range[4], {})
+	for i = #toplevel_placeholders, 1, -1 do
+		local placeholder = toplevel_placeholders[i]
+		vim.api.nvim_buf_set_text(0, placeholder.to[1], placeholder.to[2]-#comment_def.placeholder_end, placeholder.to[1], placeholder.to[2], {comment_def.block_end})
+		vim.api.nvim_buf_set_text(0, placeholder.from[1], placeholder.from[2], placeholder.from[1], placeholder.from[2]+#comment_def.placeholder_begin, {comment_def.block_begin})
+	end
+	vim.api.nvim_buf_set_text(0, range[1], range[2], range[1], range[2]+#comment_def.block_begin, {})
+end
+
 -- return range from, to-inclusive.
-local function get_linecomment_range(linecomment_def, buffer_lines, linenr)
+local function get_linecomment_range(opts)
+	local linecomment_def = opts.comment_def
+	local buffer_lines = opts.buffer_lines
+	local linenr = opts.pos[1]
+
 	buffer_lines = contiguous_linerange.new({center = linenr})
 
 	local pos_linetype = linecomment_def:linetype(buffer_lines[linenr])
 
 	if pos_linetype == LineCommentType.singleline then
-		return linenr, linenr
+		return {linenr, linenr}
 	end
 	if pos_linetype == nil then
-		return nil, nil
+		return nil
 	end
 
 	local from_linenr = pos_linetype == LineCommentType.to and linenr-1 or linenr
 	while true do
 		if from_linenr == -1 then
-			return nil,nil
+			return nil
 		end
 		local from_linetype = linecomment_def:linetype(buffer_lines[from_linenr])
 
 		if from_linetype == nil or from_linetype == LineCommentType.to or from_linetype == LineCommentType.singleline then
 			-- line is not a connecting line, and we have not reached the
 			-- `from` => this is not a comment-range.
-			return nil,nil
+			return nil
 		elseif from_linetype == LineCommentType.from then
 			break
 		end
@@ -37,22 +116,26 @@ local function get_linecomment_range(linecomment_def, buffer_lines, linenr)
 	local to_linenr = pos_linetype == LineCommentType.from and linenr+1 or linenr
 	while true do
 		if to_linenr == buffer_lines.n_lines then
-			return nil,nil
+			return nil
 		end
 		local to_linetype = linecomment_def:linetype(buffer_lines[to_linenr])
 
 		if to_linetype == nil or to_linetype == LineCommentType.from or to_linetype == LineCommentType.singleline then
-			return nil,nil
+			return nil
 		elseif to_linetype == LineCommentType.to then
 			break
 		end
 		to_linenr = to_linenr + 1
 	end
 
-	return from_linenr, to_linenr
+	return {from_linenr, 0, to_linenr, 0}
 end
 
-local function uncomment_line_range(linecomment_def, buffer_lines, from, to)
+local function uncomment_line_range(range, opts)
+	local from, to = range[1], range[3]
+	local linecomment_def = opts.comment_def
+	local buffer_lines = opts.buffer_lines
+
 	for i = from, to do
 		local first_non_space_col = buffer_lines[i]:find("[^%s]")
 		-- if nil, this is a blank line, which is completely valid.
@@ -63,7 +146,11 @@ local function uncomment_line_range(linecomment_def, buffer_lines, from, to)
 	end
 end
 
-local function comment_line_range(linecomment_def, buffer_lines, from, to)
+local function comment_line_range(range, opts)
+	local linecomment_def = opts.comment_def
+	local buffer_lines = opts.buffer_lines
+	local from, to = range[1], range[3]
+
 	local from_char = from == to and linecomment_def.ssingleline or linecomment_def.sfrom
 	for i = from, to do
 		local comment_char = (i == from and from_char) or (i == to and linecomment_def.sto) or linecomment_def.sconnect
@@ -81,6 +168,8 @@ local ActionTypes = {
 	comment_lines = 1,
 	uncomment_lines = 2,
 	nop = 3,
+	comment_block = 4,
+	uncomment_block = 5
 }
 
 ---@class RangeAction
@@ -90,21 +179,44 @@ local ActionTypes = {
 
 local nop_action = {range = {}, type = ActionTypes.nop}
 
-local function apply_action(action, buffer_lines)
-	local fn = {
-		[ActionTypes.comment_lines] = comment_line_range,
-		[ActionTypes.uncomment_lines] = uncomment_line_range,
-		[ActionTypes.nop] = util.nop,
+local action_fns = {
+	[ActionTypes.comment_lines] = {
+		apply = comment_line_range,
+		undo = uncomment_line_range
+	},
+	[ActionTypes.uncomment_lines] = {
+		undo = comment_line_range,
+		apply = uncomment_line_range
+	},
+	[ActionTypes.comment_block] = {
+		apply = comment_block_range,
+		undo = uncomment_block_range
+	},
+	[ActionTypes.uncomment_block] = {
+		undo = comment_block_range,
+		apply = uncomment_block_range
+	},
+}
+local function do_action(mode, action, buffer_lines)
+	if action.type == ActionTypes.nop then
+		return
+	end
+
+	local opts = {
+		buffer_lines = buffer_lines,
+		comment_def = action.comment_def,
+		langtree = action.langtree,
 	}
-	fn[action.type](action.prefix_def, buffer_lines, action.range[1], action.range[3])
-end
-local function undo_action(action, buffer_lines)
-	local fn = {
-		[ActionTypes.comment_lines] = uncomment_line_range,
-		[ActionTypes.uncomment_lines] = comment_line_range,
-		[ActionTypes.nop] = util.nop,
-	}
-	fn[action.type](action.prefix_def, buffer_lines, action.range[1], action.range[3])
+	local row, col, details = unpack(vim.api.nvim_buf_get_extmark_by_id(0, data.namespace, action.extmark_id, {details = true}))
+
+	assert(row)
+	assert(col)
+	assert(details)
+
+	opts.langtree:parse()
+	local range = {row, col, details.end_row, details.end_col}
+
+	action_fns[action.type][mode](range, opts)
 end
 
 local last_actions = nil
@@ -137,25 +249,24 @@ local function get_continuing_action()
 	end
 end
 
-local function line_range(from, to)
-	-- 0 for end seems appropriate because that is where (approximately) the
-	-- comment-chars are inserted.
-	-- So, if we compare this with a regular range, it would very likely!!
-	-- insert its commend-end-symbol behind the line-comment-symbol of this
-	-- line range.
-	return {from, 0, to, 0}
-end
-
-
 return function()
 	local mode = vim.fn.mode()
-	if mode:sub(1,1) == "V" then
-		local line_dot = vim.fn.getpos(".")[2]-1
-		local line_v = vim.fn.getpos("v")[2]-1
-		local from = math.min(line_dot, line_v)
-		local to = math.max(line_dot, line_v)
+	if mode:sub(1,1):lower() == "v" then
+		local getpos_dot = vim.fn.getpos(".")
+		local getpos_v = vim.fn.getpos("v")
 
-		local range = {from, 0, to, 0}
+		local pos_dot = {getpos_dot[2]-1, getpos_dot[3]-1}
+		local pos_v = {getpos_v[2]-1, getpos_v[3]-1}
+		local from, to
+		if util.pos_cmp(pos_dot, pos_v) < 0 then
+			from, to = pos_dot, pos_v
+		else
+			from, to = pos_v, pos_dot
+		end
+
+		-- linecomment ignores the columns, so this is fine, and more accurate for getting a tree.
+		-- range should exclude the last char.
+		local range = {from[1], from[2], to[1], to[2]+1}
 
 		local root_parser = vim.treesitter.get_parser(0)
 		if not root_parser then
@@ -175,17 +286,35 @@ return function()
 		-- ```
 		-- if we Visually select the two inner set nocompatible-lines, and
 		-- toggle_comment, they definitely should no be commented with `-- `.
+		-- For block-comments, I'm not so sure, but using the innermost range
+		-- seems like a good default.
 
 		-- language_for_range descends into injections.
-		local lang = root_parser:language_for_range(range):lang()
+		local langtree = root_parser:language_for_range(range)
+		local lang = langtree:lang()
 
-		local linecomment_def = data.linecomment_defs[lang]
-		if not linecomment_def then
-			-- we cannot deal with this language.
-			return
+		local comment_range
+		local opts = {
+			buffer_lines = contiguous_linerange.new({from = from[1], to = to[1]+1}),
+			langtree = langtree,
+		}
+
+		local comment_def = data.linecomment_defs[lang]
+		if comment_def then
+			comment_range = comment_line_range
+			opts.comment_def = comment_def
+		else
+			comment_def = data.blockcomment_defs[lang]
+			if not comment_def then
+				-- we cannot deal with this language.
+				return
+			end
+			comment_range = comment_block_range
+			opts.comment_def = comment_def
 		end
 
-		comment_line_range(linecomment_def, contiguous_linerange.new({from = from, to = to+1}), from, to)
+		comment_range(range, opts)
+		-- immediately exit visual selection.
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", true)
 		return
 	elseif mode == "n" then
@@ -196,7 +325,7 @@ return function()
 		local continue_action = get_continuing_action()
 		if continue_action then
 			-- undo previous action.
-			undo_action(continue_action.actions[continue_action.applied_action_idx], buffer_lines)
+			do_action("undo", continue_action.actions[continue_action.applied_action_idx], buffer_lines)
 
 			-- find index of next action.
 			continue_action.applied_action_idx = continue_action.applied_action_idx + 1
@@ -205,7 +334,7 @@ return function()
 			end
 
 			-- apply next action
-			apply_action(continue_action.actions[continue_action.applied_action_idx], buffer_lines)
+			do_action("apply", continue_action.actions[continue_action.applied_action_idx], buffer_lines)
 
 			-- allow action to continue.
 			set_continuing_action(continue_action)
@@ -227,23 +356,7 @@ return function()
 
 		local selector = range_selectors.sorted()
 		for lang, languagetree in pairs(languagetrees) do
-			local linecomment_def = data.linecomment_defs[lang]
-			if not linecomment_def then
-				-- we cannot deal with this language, continue.
-				goto continue
-			end
-
-			local line_comment_from, line_comment_to = get_linecomment_range(linecomment_def, buffer_lines, cursor[1])
-
-			if line_comment_from then
-				-- line is commented, simply uncomment.
-				uncomment_line_range(linecomment_def, buffer_lines, line_comment_from, line_comment_to)
-				-- I think if we find an uncommentable range, it should be
-				-- uncommented immediately..?
-				return
-			end
-
-			-- look for commentable ranges.
+			local comment_def = data.linecomment_defs[lang]
 
 			local cursor_tree = languagetree:tree_for_range({
 						cursor[1],
@@ -262,46 +375,137 @@ return function()
 				goto continue;
 			end
 
-			-- only find matches that include the cursor-line.
-			for _, match, _ in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
-				for id, nodes in pairs(match) do
-					local name = query.captures[id]
-					local node_range = {nodes[1]:range()}
+			-- these functions/values all depend on the type of comment enabled
+			-- for this filetype; either linecomment or blockcomment.
+			local
+				get_comment_range, uncomment_range,
+				-- in linecomment, the range is valid if the cursor is within
+				-- the line-range, blockcomment is more strict.
+				make_cursor_check_range,
+				-- extend the end-column of the range to the end of the line.
+				make_comment_range,
+				commenttype_valid_range, comment_actiontype
+			local opts = {
+				comment_def = comment_def,
+				langtree = languagetree,
+				buffer_lines = buffer_lines,
+				pos = cursor
+			}
+			if comment_def then
+				get_comment_range = get_linecomment_range
+				uncomment_range = uncomment_line_range
+				make_cursor_check_range = function(node_range)
 					-- Since we are in line-mode, we treat the cursor as inside as long as it's on the correct line.
 					-- (extend from-column to beginning of line, end-column to end)
 					local cursor_check_range = util.shallow_copy(node_range)
 					cursor_check_range[2] = 0
-					cursor_check_range[4] = 10000
+					cursor_check_range[4] = #buffer_lines[node_range[3]]-1
+					return cursor_check_range
+				end
+				commenttype_valid_range = function(node_range)
+					-- only allow this range as comment if there are only
+					-- whitespace characters before it and if it reaches the
+					-- end of the final line.
 					local node_begin_line = buffer_lines[node_range[1]]
-					local node_begin_line_first_non_whitespace = node_begin_line:find("[^%s]")-1
-					if
-						name == "togglecomment" and
-						util.range_includes_pos(cursor_check_range, cursor) and
-						-- only allow this range as comment if there are only
-						-- whitespace characters before it
-						node_begin_line_first_non_whitespace == node_range[2] then
+					local node_end_line = buffer_lines[node_range[3]]
 
-						selector.record({
-							prefix_def = linecomment_def,
-							-- node_range is end-exclusive, but it excludes the
-							-- last column, not the last line.
-							range = line_range(node_range[1], node_range[3]),
-							type = ActionTypes.comment_lines
-						})
+					local node_begin_line_first_non_whitespace = node_begin_line:find("[^%s]")-1
+
+					return node_begin_line_first_non_whitespace == node_range[2] and #node_end_line == node_range[4]
+				end
+				-- the comment-range is identical, in this case.
+				-- TODO: don't extend from-col to 0, only to first
+				-- non-whitespace char?
+				make_comment_range = make_cursor_check_range
+				comment_actiontype = ActionTypes.comment_lines
+				opts.comment_def = comment_def
+			else
+				comment_def = data.blockcomment_defs[lang]
+				if not comment_def then
+					-- we cannot deal with this language, continue.
+					goto continue
+				end
+
+				get_comment_range = get_blockcomment_range
+				uncomment_range = uncomment_block_range
+				-- don't modify block-range for cursor check.
+				make_cursor_check_range = util.id
+				-- block-comments can handle all ranges.
+				commenttype_valid_range = util.yes
+				-- comment-range is identical to nodes' range.
+				make_comment_range = util.id
+				comment_actiontype = ActionTypes.comment_block
+				opts.comment_def = comment_def
+			end
+
+			local range = get_comment_range(opts)
+
+			if range then
+				-- line is commented, simply uncomment.
+				uncomment_range(range, opts)
+				-- I think if we find an uncommentable range, it should be
+				-- uncommented immediately..?
+				return
+			end
+
+			-- look for commentable ranges.
+
+			-- only find matches that include the cursor-line.
+			for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
+				local node_range = metadata.togglecomment
+				if not node_range then
+					for id, nodes in pairs(match) do
+						local name = query.captures[id]
+						if name == "togglecomment" then
+							node_range = {nodes[1]:range(false)}
+							break
+						end
 					end
+				end
+				local cursor_check_range = make_cursor_check_range(node_range)
+				if
+					util.range_includes_pos(cursor_check_range, cursor) and
+					commenttype_valid_range(node_range) then
+
+					selector.record({
+						comment_def = comment_def,
+						-- node_range is end-exclusive, but it excludes the
+						-- last column, not the last line.
+						range = make_comment_range(node_range),
+						type = comment_actiontype,
+						langtree = languagetree
+					})
 				end
 			end
 			::continue::
 		end
 
-		local actions_range_sorted = selector.retrieve()
+		-- track ranges via extmark; the ranges have to be on the correct char
+		-- when (un)commenting, and extmarks are much easier than manually
+		-- shifting indices.
+		local actions_range_sorted = vim.tbl_map(function(range_record)
+			local extmark_id = vim.api.nvim_buf_set_extmark(0, data.namespace, range_record.range[1], range_record.range[2], {
+				end_row = range_record.range[3],
+				end_col = range_record.range[4],
+				right_gravity = false,
+				end_right_gravity = true
+			})
+			return {
+				comment_def = range_record.comment_def,
+				type = range_record.type,
+				extmark_id = extmark_id,
+				langtree = range_record.langtree
+			}
+		end, selector.retrieve())
+
 		if #actions_range_sorted == 0 then
 			print("No toggleable node at cursor.")
 			return
 		end
+
 		table.insert(actions_range_sorted, nop_action)
 
-		apply_action(actions_range_sorted[1], buffer_lines)
+		do_action("apply", actions_range_sorted[1], buffer_lines)
 		set_continuing_action({cursor = cursor, applied_action_idx = 1, actions = actions_range_sorted})
 	end
 end

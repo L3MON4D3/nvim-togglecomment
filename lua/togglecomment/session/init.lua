@@ -2,6 +2,7 @@ local M = {}
 local data = require("togglecomment.session.data")
 local unicode_symbols = require("togglecomment.unicode_symbols")
 local LinecommentDef = require("togglecomment.linecomment").LinecommentDef
+local BlockcommentDef = require("togglecomment.blockcomment").BlockcommentDef
 
 local default_config = {
 	linecomment = {
@@ -12,7 +13,7 @@ local default_config = {
 			nix = "#",
 			query = ";",
 			lua = "--",
-			cpp = "//",
+			-- cpp = "//",
 			latex = "%",
 			zig = "//",
 			vim = "\")"
@@ -24,11 +25,27 @@ local default_config = {
 			singleline = unicode_symbols.spaces.em_space,
 		}
 	},
+	blockcomment = {
+		defs = {
+			lua = { [===[--[=[ ]===], [===[ ]=]]===] },
+			xml = { "<!-- ", " -->", node_type = "Comment"},
+			cpp = { "/* ", " */"}
+		},
+		-- have to have same length.
+		placeholder_open = unicode_symbols.misc_symbols.left_ceiling .. unicode_symbols.spaces.braille_blank,
+		placeholder_close = unicode_symbols.spaces.braille_blank .. unicode_symbols.misc_symbols.right_floor
+	}
 }
 
 function M.set_config(config)
 	local lc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "prefixes") or {}, default_config.linecomment.prefixes)
 	local lc_spaces = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "spaces") or {}, default_config.linecomment.spaces)
+
+	local bc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "blockcomment", "prefixes") or {}, default_config.blockcomment.defs)
+	local bc_open = vim.tbl_get(config, "blockcomment", "placeholder_open") or default_config.blockcomment.placeholder_open
+	local bc_close = vim.tbl_get(config, "blockcomment", "placeholder_close") or default_config.blockcomment.placeholder_close
+
+	-- validate
 
 	for k, v in pairs(lc_spaces) do
 		local next_k = k
@@ -48,9 +65,17 @@ function M.set_config(config)
 		end
 	end
 
+	if #bc_open ~= #bc_close then
+		error("placeholder_open and placeholder_close have different lengths.")
+	end
+
 	data.linecomment_defs = vim.tbl_map(function(commentstring)
 		return LinecommentDef.new(lc_spaces, commentstring)
 	end, lc_prefixes)
+
+	data.blockcomment_defs = vim.tbl_map(function(commentstrings)
+		return BlockcommentDef.new(commentstrings[1], commentstrings[2], bc_open, bc_close, commentstrings.node_type or "comment")
+	end, bc_prefixes)
 end
 
 -- set default values.
