@@ -225,9 +225,9 @@ local idx = 1
 local function set_continuing_action(val)
 	-- make copy, s.t. check below does not just check global idx!
 	local current_idx = idx
-	val.idx = current_idx
 	last_actions = {
 		val = val,
+		idx = current_idx,
 		cursor = util.get_cursor_0ind(),
 		changedtick = vim.b.changedtick
 	}
