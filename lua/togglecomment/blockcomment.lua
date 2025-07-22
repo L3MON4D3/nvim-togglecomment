@@ -1,3 +1,4 @@
+---@class Togglecomment.BlockcommentDef : Togglecomment.CommentDef
 local BlockcommentDef = {}
 BlockcommentDef.__index = BlockcommentDef
 

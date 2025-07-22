@@ -4,6 +4,12 @@ local range_selectors = require("togglecomment.range_selectors")
 local LineCommentType = require("togglecomment.linecomment").LineCommentType
 local data = require("togglecomment.session.data")
 
+---@class Togglecomment.Comment.CommentFnOpts
+---@field langtree vim.treesitter.LanguageTree freshly parsed languagetree.
+---@field buffer_lines ToggleComment.LazyContiguousLinerange
+---@field pos Togglecomment.ByteColPosition cursor position
+---@field comment_def Togglecomment.CommentDef
+
 local function get_blockcomment_range(opts)
 	local comment_def = opts.comment_def
 	local commentnode_type = comment_def.commentnode_type
@@ -163,7 +169,7 @@ local function comment_line_range(range, opts)
 	end
 end
 
----@enum ActionType
+---@enum Togglecomment.ActionType
 local ActionTypes = {
 	comment_lines = 1,
 	uncomment_lines = 2,
@@ -175,7 +181,7 @@ local ActionTypes = {
 ---@class RangeAction
 ---@field prefix_def table
 ---@field range integer[]
----@field type ActionType
+---@field type Togglecomment.ActionType
 
 local nop_action = {range = {}, type = ActionTypes.nop}
 
@@ -355,8 +361,6 @@ return function()
 
 		local selector = range_selectors.sorted()
 		for lang, languagetree in pairs(languagetrees) do
-			local comment_def = data.linecomment_defs[lang]
-
 			local cursor_tree = languagetree:tree_for_range({
 						cursor[1],
 						cursor[2],
@@ -374,26 +378,32 @@ return function()
 				goto continue;
 			end
 
-			-- these functions/values all depend on the type of comment enabled
-			-- for this filetype; either linecomment or blockcomment.
-			local
-				get_comment_range, uncomment_range,
-				-- in linecomment, the range is valid if the cursor is within
-				-- the line-range, blockcomment is more strict.
-				make_cursor_check_range,
-				-- extend the end-column of the range to the end of the line.
-				make_comment_range,
-				commenttype_valid_range, comment_actiontype
-			local opts = {
-				comment_def = comment_def,
+			local common_fn_opts = {
 				langtree = languagetree,
 				buffer_lines = buffer_lines,
 				pos = cursor
 			}
-			if comment_def then
-				get_comment_range = get_linecomment_range
-				uncomment_range = uncomment_line_range
-				make_cursor_check_range = function(node_range)
+			---@class Togglecomment.Comment.CommentTypeOpts
+			---@field get_comment_range fun(Togglecomment.Comment.CommentFnOpts): Togglecomment.BufRange
+			---@field uncomment_range fun(Togglecomment.BufRange, ToggleComment.Comment.CommentFnOpts)
+			---@field make_cursor_check_range fun(Togglecomment.BufRange): Togglecomment.BufRange
+			---@field make_comment_range fun(Togglecomment.BufRange): Togglecomment.BufRange
+			---Creates the ranges that are ultimately compared with one another.
+			---For example the line-ranges may have to be extended to reach to
+			---the end of the line.
+			---@field commenttype_valid_range fun(Togglecomment.BufRange): boolean
+			---Return whether the range can be commented with the functions
+			---provided here (with linecomments, for example, the range has to cover entire lines).
+			---@field comment_actiontype Togglecomment.ActionType
+			---@field comment_fn_opts Togglecomment.Comment.CommentFnOpts
+
+			local commenttypes = ({} --[[@as Togglecomment.Comment.CommentTypeOpts[] ]])
+
+			local linecomment_def = data.linecomment_defs[lang]
+			if linecomment_def then
+				local fn_opts = util.shallow_copy(common_fn_opts)
+				fn_opts.comment_def = linecomment_def
+				local make_cursor_check_range = function(node_range)
 					-- Since we are in line-mode, we treat the cursor as inside as long as it's on the correct line.
 					-- (extend from-column to beginning of line, end-column to end)
 					local cursor_check_range = util.shallow_copy(node_range)
@@ -401,50 +411,63 @@ return function()
 					cursor_check_range[4] = #buffer_lines[node_range[3]]-1
 					return cursor_check_range
 				end
-				commenttype_valid_range = function(node_range)
-					-- only allow this range as comment if there are only
-					-- whitespace characters before it and if it reaches the
-					-- end of the final line.
-					local node_begin_line = buffer_lines[node_range[1]]
-					local node_end_line = buffer_lines[node_range[3]]
+				table.insert(commenttypes, {
+					get_comment_range = get_linecomment_range,
+					uncomment_range = uncomment_line_range,
+					make_cursor_check_range = make_cursor_check_range,
+					commenttype_valid_range = function(node_range)
+						-- only allow this range as comment if there are only
+						-- whitespace characters before it and if it reaches the
+						-- end of the final line.
+						local node_begin_line = buffer_lines[node_range[1]]
+						local node_end_line = buffer_lines[node_range[3]]
 
-					local node_begin_line_first_non_whitespace = node_begin_line:find("[^%s]")-1
+						local node_begin_line_first_non_whitespace = node_begin_line:find("[^%s]")-1
 
-					return node_begin_line_first_non_whitespace == node_range[2] and #node_end_line == node_range[4]
-				end
-				-- the comment-range is identical, in this case.
-				-- TODO: don't extend from-col to 0, only to first
-				-- non-whitespace char?
-				make_comment_range = make_cursor_check_range
-				comment_actiontype = ActionTypes.comment_lines
-				opts.comment_def = comment_def
-			else
-				comment_def = data.blockcomment_defs[lang]
-				if not comment_def then
-					-- we cannot deal with this language, continue.
-					goto continue
-				end
+						return node_begin_line_first_non_whitespace == node_range[2] and #node_end_line == node_range[4]
+					end,
+					-- the comment-range is identical, in this case.
+					-- TODO: don't extend from-col to 0, only to first
+					-- non-whitespace char?
+					make_comment_range = make_cursor_check_range,
+					comment_actiontype = ActionTypes.comment_lines,
+					comment_fn_opts = fn_opts
+				})
+			end
+			local blockcomment_def = data.blockcomment_defs[lang]
+			if blockcomment_def then
+				local fn_opts = util.shallow_copy(common_fn_opts)
+				fn_opts.comment_def = blockcomment_def
 
-				get_comment_range = get_blockcomment_range
-				uncomment_range = uncomment_block_range
-				-- don't modify block-range for cursor check.
-				make_cursor_check_range = util.id
-				-- block-comments can handle all ranges.
-				commenttype_valid_range = util.yes
-				-- comment-range is identical to nodes' range.
-				make_comment_range = util.id
-				comment_actiontype = ActionTypes.comment_block
-				opts.comment_def = comment_def
+				table.insert(commenttypes, {
+					get_comment_range = get_blockcomment_range,
+					uncomment_range = uncomment_block_range,
+					-- don't modify block-range for cursor check.
+					make_cursor_check_range = util.id,
+					-- block-comments can handle all ranges.
+					commenttype_valid_range = util.yes,
+					-- comment-range is identical to nodes' range.
+					make_comment_range = util.id,
+					comment_actiontype = ActionTypes.comment_block,
+					comment_fn_opts = fn_opts
+				})
+			end
+			if #commenttypes == 0 then
+				-- we cannot deal with this language, continue.
+				goto continue
 			end
 
-			local range = get_comment_range(opts)
+			for _, ct in ipairs(commenttypes) do
+				local range = ct.get_comment_range(ct.comment_fn_opts)
 
-			if range then
-				-- line is commented, simply uncomment.
-				uncomment_range(range, opts)
-				-- I think if we find an uncommentable range, it should be
-				-- uncommented immediately..?
-				return
+				if range then
+					-- line is commented, simply uncomment.
+					ct.uncomment_range(range, ct.comment_fn_opts)
+					-- I think if we find an uncommentable range, it should be
+					-- uncommented immediately..?
+					-- Also, we can abort here, we don't want to uncomment twice.
+					return
+				end
 			end
 
 			-- look for commentable ranges.
@@ -459,7 +482,7 @@ return function()
 						local name = query.captures[id]
 						if name == "togglecomment" then
 							-- set this way by #trim!.
-							node_range = metadata[id].range
+							node_range = metadata[id] and metadata[id].range
 							if not node_range then
 								node_range = {nodes[1]:range(false)}
 							end
@@ -467,19 +490,25 @@ return function()
 						end
 					end
 				end
-				local cursor_check_range = make_cursor_check_range(node_range)
-				if
-					util.range_includes_pos(cursor_check_range, cursor) and
-					commenttype_valid_range(node_range) then
 
-					selector.record({
-						comment_def = comment_def,
-						-- node_range is end-exclusive, but it excludes the
-						-- last column, not the last line.
-						range = make_comment_range(node_range),
-						type = comment_actiontype,
-						langtree = languagetree
-					})
+				for _, ct in ipairs(commenttypes) do
+					local cursor_check_range = ct.make_cursor_check_range(node_range)
+					if
+						util.range_includes_pos(cursor_check_range, cursor) and
+						ct.commenttype_valid_range(node_range) then
+
+						selector.record({
+							comment_def = ct.comment_fn_opts.comment_def,
+							-- node_range is end-exclusive, but it excludes the
+							-- last column, not the last line.
+							range = ct.make_comment_range(node_range),
+							type = ct.comment_actiontype,
+							langtree = languagetree
+						})
+						-- once we have found a fitting commenttype for this
+						-- match, don't insert it again.
+						break
+					end
 				end
 			end
 			::continue::

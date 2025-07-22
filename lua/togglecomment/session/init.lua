@@ -13,7 +13,7 @@ local default_config = {
 			nix = "#",
 			query = ";",
 			lua = "--",
-			-- cpp = "//",
+			cpp = "//",
 			latex = "%",
 			zig = "//",
 			vim = "\")"
@@ -29,7 +29,8 @@ local default_config = {
 		defs = {
 			lua = { [===[--[=[ ]===], [===[ ]=]]===] },
 			xml = { "<!-- ", " -->", node_type = "Comment"},
-			cpp = { "/* ", " */"}
+			cpp = { "/* ", " */"},
+			markdown = { "<!-- ", " -->", node_type = "html_block" }
 		},
 		-- have to have same length.
 		placeholder_open = unicode_symbols.misc_symbols.left_ceiling .. unicode_symbols.spaces.braille_blank,

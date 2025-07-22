@@ -6,6 +6,7 @@ local LineCommentType = {
 	connect_maybe = 5
 }
 
+---@class Togglecomment.LinecommentDef : Togglecomment.CommentDef
 local LinecommentDef = {}
 LinecommentDef.__index = LinecommentDef
 
