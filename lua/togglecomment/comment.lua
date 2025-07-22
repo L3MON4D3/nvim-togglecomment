@@ -235,7 +235,6 @@ local function set_continuing_action(val)
 	vim.defer_fn(function()
 		-- make sure we can only delete the last_toggle-val set in this call.
 		if last_actions.idx == current_idx then
-			-- print("removing lt " .. vim.inspect(last_toggle))
 			last_actions = nil
 		end
 	end, 1000)
@@ -505,7 +504,7 @@ return function()
 		end, selector.retrieve())
 
 		if #actions_range_sorted == 0 then
-			print("No toggleable node at cursor.")
+			vim.notify("No toggleable node at cursor.", vim.log.levels.WARN)
 			return
 		end
 
