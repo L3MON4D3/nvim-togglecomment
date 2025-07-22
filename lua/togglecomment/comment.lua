@@ -90,7 +90,7 @@ local function get_linecomment_range(opts)
 	local pos_linetype = linecomment_def:linetype(buffer_lines[linenr])
 
 	if pos_linetype == LineCommentType.singleline then
-		return {linenr, linenr}
+		return {linenr, 0, linenr, 0}
 	end
 	if pos_linetype == nil then
 		return nil
