@@ -95,9 +95,21 @@ return function()
 			from, to = pos_v, pos_dot
 		end
 
+
+		local buffer_lines = contiguous_linerange.new({from = from[1], to = to[1]+1})
+		if mode:sub(1,1) == "V" then
+			from[2] = 0
+			to[2] = #buffer_lines[to[1]]
+		else
+			-- clamp columns to last character!
+			-- +1: getpos gives positions as end-inclusive, we want end-exclusive
+			from[2] = math.min(#buffer_lines[from[1]], from[2])
+			to[2] = math.min(#buffer_lines[to[1]], to[2]+1)
+		end
+
 		-- linecomment ignores the columns, so this is fine, and more accurate for getting a tree.
 		-- range should exclude the last char.
-		local range = {from[1], from[2], to[1], to[2]+1}
+		local range = util.range_from_endpoints(from, to)
 
 		local root_parser = vim.treesitter.get_parser(0)
 		if not root_parser then
@@ -124,27 +136,29 @@ return function()
 		local langtree = util.langtree_for_range(root_parser, range)
 		local lang = langtree:lang()
 
-		local comment_range
+		-- variables, will be completed after deciding whether block- or
+		-- line-comments should be used.
 		local opts = {
-			buffer_lines = contiguous_linerange.new({from = from[1], to = to[1]+1}),
+			buffer_lines = buffer_lines,
 			langtree = langtree,
 		}
+		local comment_def
 
-		local comment_def = data.linecomment_defs[lang]
-		if comment_def then
-			comment_range = comment_line_range
-			opts.comment_def = comment_def
+		local linecomment_def = data.linecomment_defs[lang]
+		local blockcomment_def = data.blockcomment_defs[lang]
+		local prefer_linecomment = mode:sub(1,1) == "V"
+
+		if linecomment_def and (prefer_linecomment or blockcomment_def == nil) then
+			comment_def = linecomment_def
 		else
-			comment_def = data.blockcomment_defs[lang]
-			if not comment_def then
-				-- we cannot deal with this language.
-				return
-			end
-			comment_range = comment_block_range
-			opts.comment_def = comment_def
+			comment_def = blockcomment_def
+		end
+		if not comment_def then
+			vim.notify("Cannot toggle comments for filetype " .. lang, vim.log.levels.WARN)
+			return
 		end
 
-		comment_range(range, opts)
+		comment_def:comment(range, opts)
 		-- immediately exit visual selection.
 		vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", true)
 		return
