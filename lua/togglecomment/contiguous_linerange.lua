@@ -1,9 +1,6 @@
 local M = {}
 
 local function fetch_lines_safe(buf, from, to, n_lines)
-	if from == nil then
-		print(buf, from, to)
-	end
 	local max_to = n_lines
 	local clamped_from = math.max(from, 0)
 	local clamped_to = math.min(to, max_to)
