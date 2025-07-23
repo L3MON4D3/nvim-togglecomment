@@ -38,7 +38,7 @@ local default_config = {
 	}
 }
 
-function M.set_config(config)
+function M.setup(config)
 	local lc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "prefixes") or {}, default_config.linecomment.prefixes)
 	local lc_spaces = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "spaces") or {}, default_config.linecomment.spaces)
 
@@ -81,7 +81,7 @@ end
 
 -- set default values.
 function M.initialize()
-	M.set_config(default_config)
+	M.setup({})
 end
 
 return M
