@@ -17,6 +17,9 @@ local function get_blockcomment_range(opts)
 	local pos = opts.pos
 	local buffer_lines = opts.buffer_lines
 
+	-- apparently parses all nodes covering the position :)
+	langtree:parse({pos[1], pos[2], pos[1], pos[2]+1})
+
 	local node = langtree:named_node_for_range({pos[1],pos[2],pos[1],pos[2]}, {ignore_injections = true})
 	local comment_range
 	while true do
@@ -39,6 +42,11 @@ end
 local function comment_block_range(range, opts)
 	local comment_def = opts.comment_def
 	local langtree = opts.langtree
+	-- for some reason, just :parse() is not enough sometimes (seems to affect
+	-- injected languages).
+	-- Explicitly reparse the range we're interested in.
+	langtree:parse(range)
+
 	local cursor_tree = util.tree_for_range(langtree, range)
 	if not cursor_tree then
 		error("Unexpected: Could not find tree for requested range!")
