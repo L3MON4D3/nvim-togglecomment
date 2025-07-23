@@ -165,4 +165,16 @@ function M.langtree_for_range(langtree, range, buffer_lines)
 	return langtree
 end
 
+function M.langtrees_for_range(langtree, range, buffer_lines)
+	local res = {}
+	if M.tree_for_range(langtree, range, buffer_lines) then
+		table.insert(res, langtree)
+	end
+	for _, child_langtree in pairs(langtree:children()) do
+		vim.list_extend(res, M.langtrees_for_range(child_langtree, range, buffer_lines))
+	end
+
+	return res
+end
+
 return M

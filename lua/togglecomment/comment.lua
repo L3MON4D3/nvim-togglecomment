@@ -191,23 +191,13 @@ return function()
 		if not root_parser then
 			error("Could not get parser!")
 		end
-
-		-- important!!! :children returns languagetree._children directly, if we
-		-- modify that table, we're in for bad recursion in languagetree:_edit :|
-		local languagetrees = util.shallow_copy(root_parser:children())
-		-- languagetrees only contains children of the top-level-parser, but
-		-- not the top-level-parser itself => add it.
-		languagetrees[root_parser:lang()] = root_parser
+		root_parser:parse()
 
 		local selector = range_selectors.sorted()
-		for lang, languagetree in pairs(languagetrees) do
-			local cursor_tree = languagetree:tree_for_range({
-						cursor[1],
-						cursor[2],
-						cursor[1],
-						cursor[2],
-						-- we will look at the other languagetrees later.
-					}, {ignore_injections = true})
+		local cursor_range = util.range_from_endpoints(cursor, cursor)
+		for _, languagetree in ipairs(util.langtrees_for_range(root_parser, cursor_range, buffer_lines)) do
+			local lang = languagetree:lang()
+			local cursor_tree = languagetree:tree_for_range(cursor_range, {ignore_injections = true})
 
 			if not cursor_tree then
 				goto continue;
