@@ -60,6 +60,18 @@ function M.range_includes_range(r1, r2)
 	return M.pos_cmp(s1, s2) <= 0 and M.pos_cmp(e2, e1) <= 0
 end
 
+function M.range_from(range)
+	return {range[1], range[2]}
+end
+
+function M.range_to(range)
+	return {range[3], range[4]}
+end
+
+function M.range_from_endpoints(from, to)
+	return {from[1], from[2], to[1], to[2]}
+end
+
 -- code adapted from github:nvim/runtime/lua/vim/treesitter/query.lua
 function M.trim_node(node, bufnr)
 	local start_row, start_col, end_row, end_col = node:range()
@@ -100,6 +112,39 @@ function M.trim_node(node, bufnr)
 	-- If this produces an invalid range, we just skip it.
 	if start_row < end_row or (start_row == end_row and start_col <= end_col) then
 		return {start_row, start_col, end_row, end_col}
+	end
+	return nil
+end
+
+function M.fuse_ranges(ranges)
+	local fused_ranges = {ranges[1]}
+	for _, range in ipairs(ranges) do
+		local last_range = fused_ranges[#fused_ranges]
+		if M.pos_cmp(M.range_to(last_range), M.range_from(range)) == 0 then
+			fused_ranges[#fused_ranges] = M.range_from_endpoints(M.range_from(last_range), M.range_to(range))
+		else
+			table.insert(fused_ranges, range)
+		end
+	end
+	return fused_ranges
+end
+
+function M.tree_for_range(langtree, range)
+	local trees = langtree:trees()
+	for _, tree in ipairs(trees) do
+		local tsranges = tree:included_ranges(false)
+		local ranges = M.shallow_copy(tsranges)
+		table.sort(ranges, function(r1, r2)
+			-- I("r1", M.range_from(r1), "r2", M.range_from(r2), "cmp", M.pos_cmp(M.range_from(r1), M.range_from(r2)) < 0)
+			return M.pos_cmp(M.range_from(r1), M.range_from(r2)) < 0
+		end)
+
+		local fused_ranges = M.fuse_ranges(ranges)
+		for _, tree_range in ipairs(fused_ranges) do
+			if M.range_includes_range(tree_range, range) then
+				return tree
+			end
+		end
 	end
 	return nil
 end

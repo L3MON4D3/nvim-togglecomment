@@ -39,7 +39,10 @@ end
 local function comment_block_range(range, opts)
 	local comment_def = opts.comment_def
 	local langtree = opts.langtree
-	local cursor_tree = langtree:tree_for_range(range, {ignore_injections = true})
+	local cursor_tree = util.tree_for_range(langtree, range)
+	if not cursor_tree then
+		error("Unexpected: Could not find tree for requested range!")
+	end
 
 	local query = vim.treesitter.query.parse(langtree:lang(), ("((%s) @comment (#trim! @comment 1 1 1 1))"):format(comment_def.commentnode_type))
 
