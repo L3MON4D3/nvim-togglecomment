@@ -1,3 +1,5 @@
+local util = require("togglecomment.util")
+
 ---@class Togglecomment.BlockcommentDef : Togglecomment.CommentDef
 local BlockcommentDef = {}
 BlockcommentDef.__index = BlockcommentDef
@@ -84,6 +86,88 @@ function BlockcommentDef:toplevel_placeholders(continuous_linerange, range)
 			line_handled_columns = idx + self.placeholder_len
 		end
 	end
+end
+
+function BlockcommentDef:get_comment_range(opts)
+	local langtree = opts.langtree
+	local pos = opts.pos
+	local buffer_lines = opts.buffer_lines
+
+	local comment_def = self
+	local commentnode_type = comment_def.commentnode_type
+
+	-- apparently parses all nodes covering the position :)
+	langtree:parse({pos[1], pos[2], pos[1], pos[2]+1})
+
+	local node = langtree:named_node_for_range({pos[1],pos[2],pos[1],pos[2]}, {ignore_injections = true})
+	local comment_range
+	while true do
+		if not node then
+			return nil
+		end
+
+		if node:type() == commentnode_type then
+			comment_range = util.trim_node(node, 0)
+			break
+		end
+		node = node:parent()
+	end
+
+	if comment_def:valid(buffer_lines, comment_range) then
+		return comment_range
+	end
+end
+function BlockcommentDef:comment(range, opts)
+	local langtree = opts.langtree
+
+	-- for some reason, just :parse() is not enough sometimes (seems to affect
+	-- injected languages).
+	-- Explicitly reparse the range we're interested in.
+	langtree:parse(range)
+
+	local cursor_tree = util.tree_for_range(langtree, range)
+	if not cursor_tree then
+		error("Unexpected: Could not find tree for requested range!")
+	end
+
+	local query = vim.treesitter.query.parse(langtree:lang(), ("((%s) @comment (#trim! @comment 1 1 1 1))"):format(self.commentnode_type))
+
+	local comments_in_comment_range = {}
+	for _, _, metadata in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do
+		-- only one pattern and one captured node, and we always trim, so metadata has the correct range.
+		local node_range = metadata[1].range
+		if util.range_includes_range(range, node_range) then
+			table.insert(comments_in_comment_range, node_range)
+		end
+	end
+
+	-- these ranges cannot overlap, so we can sort them by comparing their row.
+	util.sort_ranges(comments_in_comment_range)
+
+	-- start inserting characters, back to front so we don't have to adjust
+	-- positions.
+	vim.api.nvim_buf_set_text(0, range[3], range[4], range[3], range[4], {self.block_end})
+	for i = #comments_in_comment_range, 1, -1 do
+		local commentrange = comments_in_comment_range[i]
+		vim.api.nvim_buf_set_text(0, commentrange[3], commentrange[4]-#self.block_end, commentrange[3], commentrange[4], {self.placeholder_end})
+		vim.api.nvim_buf_set_text(0, commentrange[1], commentrange[2], commentrange[1], commentrange[2]+#self.block_begin, {self.placeholder_begin})
+	end
+	vim.api.nvim_buf_set_text(0, range[1], range[2], range[1], range[2], {self.block_begin})
+end
+function BlockcommentDef:uncomment(range, opts)
+	local buffer_lines = opts.buffer_lines
+
+	local toplevel_placeholders = self:toplevel_placeholders(buffer_lines, range)
+
+	-- again, back to front for correct offsets.
+
+	vim.api.nvim_buf_set_text(0, range[3], range[4]-#self.block_end, range[3], range[4], {})
+	for i = #toplevel_placeholders, 1, -1 do
+		local placeholder = toplevel_placeholders[i]
+		vim.api.nvim_buf_set_text(0, placeholder.to[1], placeholder.to[2]-#self.placeholder_end, placeholder.to[1], placeholder.to[2], {self.block_end})
+		vim.api.nvim_buf_set_text(0, placeholder.from[1], placeholder.from[2], placeholder.from[1], placeholder.from[2]+#self.placeholder_begin, {self.block_begin})
+	end
+	vim.api.nvim_buf_set_text(0, range[1], range[2], range[1], range[2]+#self.block_begin, {})
 end
 
 return {
