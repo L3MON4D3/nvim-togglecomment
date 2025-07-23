@@ -16,7 +16,7 @@ local default_config = {
 			cpp = "//",
 			latex = "%",
 			zig = "//",
-			vim = "\")"
+			vim = "\""
 		},
 		spaces = {
 			from = unicode_symbols.spaces.en_quad,
