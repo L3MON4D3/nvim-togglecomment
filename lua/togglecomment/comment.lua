@@ -121,7 +121,7 @@ return function()
 		-- seems like a good default.
 
 		-- language_for_range descends into injections.
-		local langtree = root_parser:language_for_range(range)
+		local langtree = util.langtree_for_range(root_parser, range)
 		local lang = langtree:lang()
 
 		local comment_range

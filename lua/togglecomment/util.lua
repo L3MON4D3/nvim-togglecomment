@@ -152,4 +152,14 @@ function M.tree_for_range(langtree, range)
 	return nil
 end
 
+function M.langtree_for_range(langtree, range)
+	for _, childlangtree in pairs(langtree:children()) do
+		if M.tree_for_range(childlangtree, range) then
+			return M.langtree_for_range(childlangtree, range)
+		end
+	end
+
+	return langtree
+end
+
 return M
