@@ -203,11 +203,6 @@ return function()
 				goto continue;
 			end
 
-			local query = vim.treesitter.query.get(lang, "togglecomment")
-			if query == nil then
-				goto continue;
-			end
-
 			local fn_opts = {
 				langtree = languagetree,
 				buffer_lines = buffer_lines,
@@ -291,6 +286,11 @@ return function()
 			end
 
 			-- look for commentable ranges.
+
+			local query = vim.treesitter.query.get(lang, "togglecomment")
+			if query == nil then
+				goto continue;
+			end
 
 			-- only find matches that include the cursor-line.
 			for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
