@@ -133,7 +133,7 @@ return function()
 		-- seems like a good default.
 
 		-- language_for_range descends into injections.
-		local langtree = util.langtree_for_range(root_parser, range)
+		local langtree = util.langtree_for_range(root_parser, range, buffer_lines)
 		local lang = langtree:lang()
 
 		-- variables, will be completed after deciding whether block- or

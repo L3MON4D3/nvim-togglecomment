@@ -125,13 +125,14 @@ function BlockcommentDef:get_comment_range(opts)
 end
 function BlockcommentDef:comment(range, opts)
 	local langtree = opts.langtree
+	local buffer_lines = opts.buffer_lines
 
 	-- for some reason, just :parse() is not enough sometimes (seems to affect
 	-- injected languages).
 	-- Explicitly reparse the range we're interested in.
 	langtree:parse(range)
 
-	local cursor_tree = util.tree_for_range(langtree, range)
+	local cursor_tree = util.tree_for_range(langtree, range, buffer_lines)
 	if not cursor_tree then
 		error("Unexpected: Could not find tree for requested range!")
 	end

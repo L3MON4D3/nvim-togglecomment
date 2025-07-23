@@ -122,11 +122,14 @@ function M.trim_node(node, bufnr)
 	return nil
 end
 
-function M.fuse_ranges(ranges)
+function M.fuse_buffer_ranges(ranges, buffer_lines)
 	local fused_ranges = {ranges[1]}
-	for _, range in ipairs(ranges) do
+	for i = 2, #ranges do
+		local range = ranges[i]
 		local last_range = fused_ranges[#fused_ranges]
-		if M.pos_cmp(M.range_to(last_range), M.range_from(range)) == 0 then
+		local text_between = table.concat(buffer_lines:get_text(M.range_from_endpoints(M.range_to(last_range), M.range_from(range)))):sub(1, -1)
+
+		if text_between:match("%s*") then
 			fused_ranges[#fused_ranges] = M.range_from_endpoints(M.range_from(last_range), M.range_to(range))
 		else
 			table.insert(fused_ranges, range)
@@ -135,14 +138,14 @@ function M.fuse_ranges(ranges)
 	return fused_ranges
 end
 
-function M.tree_for_range(langtree, range)
+function M.tree_for_range(langtree, range, buffer_lines)
 	local trees = langtree:trees()
 	for _, tree in ipairs(trees) do
 		local tsranges = tree:included_ranges(false)
 		local ranges = M.shallow_copy(tsranges)
 		M.sort_ranges(ranges)
 
-		local fused_ranges = M.fuse_ranges(ranges)
+		local fused_ranges = M.fuse_buffer_ranges(ranges, buffer_lines)
 		for _, tree_range in ipairs(fused_ranges) do
 			if M.range_includes_range(tree_range, range) then
 				return tree
@@ -152,10 +155,10 @@ function M.tree_for_range(langtree, range)
 	return nil
 end
 
-function M.langtree_for_range(langtree, range)
+function M.langtree_for_range(langtree, range, buffer_lines)
 	for _, childlangtree in pairs(langtree:children()) do
-		if M.tree_for_range(childlangtree, range) then
-			return M.langtree_for_range(childlangtree, range)
+		if M.tree_for_range(childlangtree, range, buffer_lines) then
+			return M.langtree_for_range(childlangtree, range, buffer_lines)
 		end
 	end
 
