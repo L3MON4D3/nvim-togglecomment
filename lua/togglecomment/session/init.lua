@@ -28,9 +28,11 @@ local default_config = {
 	blockcomment = {
 		defs = {
 			lua = { [===[--[=[ ]===], [===[ ]=]]===] },
-			xml = { "<!-- ", " -->", node_type = "Comment"},
+			xml = { "<!-- ", " -->", comment_query = "(Comment) @comment"},
 			cpp = { "/* ", " */"},
-			markdown = { "<!-- ", " -->", node_type = "html_block" }
+			markdown = { "<!-- ", " -->", comment_query = "((html_block) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))" },
+			markdown_inline = { "<!-- ", " -->", comment_query = "((html_tag) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))" },
+			html = {"<!-- ", " -->", comment_query = "(comment) @comment"}
 		},
 		-- have to have same length.
 		placeholder_open = unicode_symbols.misc_symbols.left_ceiling .. unicode_symbols.spaces.braille_blank,
@@ -75,7 +77,7 @@ function M.setup(config)
 	end, lc_prefixes)
 
 	data.blockcomment_defs = vim.tbl_map(function(commentstrings)
-		return BlockcommentDef.new(commentstrings[1], commentstrings[2], bc_open, bc_close, commentstrings.node_type or "comment")
+		return BlockcommentDef.new(commentstrings[1], commentstrings[2], bc_open, bc_close, commentstrings.comment_query or "((comment) @comment (#trim! @comment 1 1 1 1))")
 	end, bc_prefixes)
 end
 

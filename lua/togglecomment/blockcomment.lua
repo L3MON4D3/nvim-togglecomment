@@ -4,15 +4,14 @@ local util = require("togglecomment.util")
 local BlockcommentDef = {}
 BlockcommentDef.__index = BlockcommentDef
 
-function BlockcommentDef.new(begin_str, end_str, placeholder_begin, placeholder_end, commentnode_type)
+function BlockcommentDef.new(begin_str, end_str, placeholder_begin, placeholder_end, comment_query)
 	return setmetatable({
 		block_begin = begin_str,
 		block_end = end_str,
 		placeholder_begin = placeholder_begin,
 		placeholder_end = placeholder_end,
 		placeholder_len = #placeholder_begin,
-		-- fixed for now, allow customization if necessary.
-		commentnode_type = commentnode_type,
+		comment_query = comment_query,
 	}, BlockcommentDef)
 end
 
@@ -94,27 +93,34 @@ function BlockcommentDef:get_comment_range(opts)
 	local buffer_lines = opts.buffer_lines
 
 	local comment_def = self
-	local commentnode_type = comment_def.commentnode_type
 
 	-- apparently parses all nodes covering the position :)
 	langtree:parse({pos[1], pos[2], pos[1], pos[2]+1})
 
-	local node = langtree:named_node_for_range({pos[1],pos[2],pos[1],pos[2]}, {ignore_injections = true})
-	local comment_range
-	while true do
-		if not node then
-			return nil
-		end
+	local query = vim.treesitter.query.parse(langtree:lang(), self.comment_query)
+	local cursor_tree = util.tree_for_range(langtree, util.range_from_endpoints(pos, pos), buffer_lines)
 
-		if node:type() == commentnode_type then
-			comment_range = util.trim_node(node, 0)
-			break
+	local comments_in_comment_range = {}
+	for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, pos[1], pos[1]+1) do
+		local comment_range = metadata.comment
+		if not comment_range then
+			for id, nodes in pairs(match) do
+				local name = query.captures[id]
+				if name == "comment" then
+					-- set this way if #trim! was used.
+					comment_range = metadata[id] and metadata[id].range
+					if not comment_range then
+						comment_range = {nodes[1]:range(false)}
+					end
+					break
+				end
+			end
 		end
-		node = node:parent()
-	end
-
-	if comment_def:valid(buffer_lines, comment_range) then
-		return comment_range
+		if comment_range and util.range_includes_pos(comment_range, pos) then
+			if comment_def:valid(buffer_lines, comment_range) then
+				return comment_range
+			end
+		end
 	end
 end
 function BlockcommentDef:comment(range, opts)
@@ -130,7 +136,7 @@ function BlockcommentDef:comment(range, opts)
 		error("Unexpected: Could not find tree for requested range!")
 	end
 
-	local query = vim.treesitter.query.parse(langtree:lang(), ("((%s) @comment (#trim! @comment 1 1 1 1))"):format(self.commentnode_type))
+	local query = vim.treesitter.query.parse(langtree:lang(), self.comment_query)
 
 	local comments_in_comment_range = {}
 	for _, _, metadata in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do
