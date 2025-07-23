@@ -72,6 +72,12 @@ function M.range_from_endpoints(from, to)
 	return {from[1], from[2], to[1], to[2]}
 end
 
+function M.sort_ranges(ranges)
+	table.sort(ranges, function(r1, r2)
+		return M.pos_cmp(M.range_from(r1), M.range_from(r2)) < 0
+	end)
+end
+
 -- code adapted from github:nvim/runtime/lua/vim/treesitter/query.lua
 function M.trim_node(node, bufnr)
 	local start_row, start_col, end_row, end_col = node:range()
@@ -134,10 +140,7 @@ function M.tree_for_range(langtree, range)
 	for _, tree in ipairs(trees) do
 		local tsranges = tree:included_ranges(false)
 		local ranges = M.shallow_copy(tsranges)
-		table.sort(ranges, function(r1, r2)
-			-- I("r1", M.range_from(r1), "r2", M.range_from(r2), "cmp", M.pos_cmp(M.range_from(r1), M.range_from(r2)) < 0)
-			return M.pos_cmp(M.range_from(r1), M.range_from(r2)) < 0
-		end)
+		M.sort_ranges(ranges)
 
 		local fused_ranges = M.fuse_ranges(ranges)
 		for _, tree_range in ipairs(fused_ranges) do

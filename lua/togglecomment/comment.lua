@@ -64,9 +64,7 @@ local function comment_block_range(range, opts)
 	end
 
 	-- these ranges cannot overlap, so we can sort them by comparing their row.
-	table.sort(comments_in_comment_range, function(a,b)
-		return a[1] < b[1]
-	end)
+	util.sort_ranges(comments_in_comment_range)
 
 	-- start inserting characters, back to front so we don't have to adjust
 	-- positions.
