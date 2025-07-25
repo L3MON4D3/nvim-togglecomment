@@ -128,7 +128,7 @@ function M.setup(config)
 	local lc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "prefixes") or {}, default_config.linecomment.prefixes)
 	local lc_spaces = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "spaces") or {}, default_config.linecomment.spaces)
 
-	local user_prefixes = vim.tbl_get(config, "blockcomment", "prefixes") or {}
+	local user_prefixes = vim.tbl_get(config, "blockcomment", "defs") or {}
 	for _, prefixdef in pairs(user_prefixes) do
 		if prefixdef.comment_query and type(prefixdef.comment_query) == "string" then
 			-- we treat a query provided by the user as always compatible with
