@@ -108,10 +108,22 @@ and allows creating ranges from endpoints of captured nodes.
 0. Install `L3MON4D3/nvim-togglecomment` with your favorite plugin-manager.
 1. Add a keybinding for the function `require("togglecomment").comment`. For
    example:
+
    ```lua
    vim.keymap.set({"n","v"}, "<leader>d", tc.comment, {noremap = true, silent = true})
    ```
+
 2. (optional) Call `require("togglecomment").setup` to add comment-symbols for
    missing languages, or override existing ones.  
    For now there is no documentation on this, but check [this file](lua/togglecomment/session/init.lua)
    for the default-configuration, it shows the structure expected by `setup`.
+3. (optional) Add more queries to customize commentable code-blocks.  
+   For example, create `vim.fn.stdpath("config")/queries/lua/togglecomment.scm`
+   with the content
+
+   ```query
+   (number) @togglecomment
+   ```
+
+   to comment numbers (nonsensical, but if it wasn't, it'd already be included
+   by default :P)
