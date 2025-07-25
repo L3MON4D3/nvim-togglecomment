@@ -88,7 +88,7 @@ local default_config = {
 	blockcomment = {
 		defs = {
 			lua = { [===[--[=[ ]===], [===[ ]=]]===] },
-			xml = { "<!-- ", " -->", comment_query_def = {
+			xml = { "<!-- ", " -->", comment_query = {
 				query = "(Comment) @comment",
 				fields = {},
 				symbols = { "Comment" },
@@ -96,13 +96,13 @@ local default_config = {
 			}},
 			cpp = { "/* ", " */"},
 			typst = { "/* ", " */"},
-			markdown = { "<!-- ", " -->", comment_query_def = {
+			markdown = { "<!-- ", " -->", comment_query = {
 				query = "((html_block) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))",
 				fields = {},
 				symbols = { "html_block" },
 				anon_symbols = {}
 			}},
-			markdown_inline = { "<!-- ", " -->", comment_query_def = {
+			markdown_inline = { "<!-- ", " -->", comment_query = {
 				query = "((html_tag) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))",
 				fields = {},
 				symbols = { "html_tag" },
@@ -130,16 +130,15 @@ function M.setup(config)
 
 	local user_prefixes = vim.tbl_get(config, "blockcomment", "prefixes") or {}
 	for _, prefixdef in pairs(user_prefixes) do
-		if prefixdef.comment_query then
+		if prefixdef.comment_query and type(prefixdef.comment_query) == "string" then
 			-- we treat a query provided by the user as always compatible with
-			-- their parser.
-			prefixdef.comment_query_def = {
+			-- the parser for this language.
+			prefixdef.comment_query = {
 				query = prefixdef.comment_query,
 				fields = {},
 				symbols = {},
 				anon_symbols = {}
 			}
-			prefixdef.comment_query = nil
 		end
 	end
 
@@ -216,7 +215,7 @@ function M.setup(config)
 		__index = function(t,k)
 			local bc_def = bc_prefixes[k]
 			if bc_def then
-				local bc_query = validate_queries(k, {comment = bc_def.comment_query_def or default_comment_query_def}, {})
+				local bc_query = validate_queries(k, {comment = bc_def.comment_query or default_comment_query_def}, {})
 				if bc_query then
 					local res = BlockcommentDef.new(bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
 					rawset(t,k,res)
