@@ -209,15 +209,17 @@ function M.setup(config)
 	data.blockcomment_defs = setmetatable({}, {
 		__index = function(t,k)
 			local bc_def = bc_prefixes[k]
-			local bc_query = validate_queries(k, {comment = bc_def.comment_query_def or default_comment_query_def}, {})
-			if bc_query then
-				local res = BlockcommentDef.new(bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
-				rawset(t,k,res)
-				return res
-			else
-				rawset(t,k,false)
-				return false
+			if bc_def then
+				local bc_query = validate_queries(k, {comment = bc_def.comment_query_def or default_comment_query_def}, {})
+				if bc_query then
+					local res = BlockcommentDef.new(bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
+					rawset(t,k,res)
+					return res
+				end
 			end
+
+			rawset(t,k,false)
+			return false
 		end
 	})
 end
