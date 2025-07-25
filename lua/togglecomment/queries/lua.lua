@@ -96,7 +96,7 @@ return {
 			; comment field and , together.
 			(
 			  ((field) @f . "," @sep)
-			  (#togglecomment-make-tc-range! @f "start" 0 0 @sep "end_" 0 0)
+			  (#togglecomment-make-tc-range! @f "start" 0 0 @sep "end" 0 0)
 			)
 		]],
 		fields = {},
