@@ -11,7 +11,7 @@ local function validate_queries(lang, query_defs, disabled_queries)
 		return nil
 	end
 
-	local query_str = ""
+	local valid_queries = {}
 
 	local valid_fields = util.list_to_set(lang_info.fields)
 	local valid_symbols = lang_info.symbols
@@ -43,13 +43,18 @@ local function validate_queries(lang, query_defs, disabled_queries)
 		if not parser_compatible then
 			vim.notify("query " .. query_def.query .. " is incompatible with the current parser for " .. lang .. ", disabling it.", vim.log.levels.WARN)
 		else
-			query_str = query_str .. query_def.query .. "\n"
+			table.insert(valid_queries, ([[
+				(
+					%s
+					(#set! "togglecomment_id" "%s.%s")
+				)
+			]]):format(query_def.query, lang, query_name))
 		end
 
 		::continue::
 	end
 
-	local ok, query = pcall(vim.treesitter.query.parse, lang, query_str)
+	local ok, query = pcall(vim.treesitter.query.parse, lang, table.concat(valid_queries, "\n"))
 	if not ok then
 		vim.notify("Error while parsing query: " .. query, vim.log.levels.WARN)
 		return nil

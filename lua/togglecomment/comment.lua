@@ -2,6 +2,7 @@ local util = require("togglecomment.util")
 local contiguous_linerange = require("togglecomment.contiguous_linerange")
 local range_selectors = require("togglecomment.range_selectors")
 local data = require("togglecomment.session.data")
+local log = require("togglecomment.util.log").new("comment")
 
 ---@enum Togglecomment.ActionType
 local ActionTypes = {
@@ -310,11 +311,18 @@ return function()
 							util.range_includes_pos(cursor_check_range, cursor) and
 							ct.commenttype_valid_range(node_range) then
 
+							local comment_range = ct.make_comment_range(node_range)
+							log.debug("Found match for %s: id: %s, node-range %s, comment-range: %s",
+								ct.comment_def.id,
+								metadata.togglecomment_id,
+								vim.inspect(node_range),
+								vim.inspect(comment_range) )
+
 							selector.record({
 								comment_def = ct.comment_def,
 								-- node_range is end-exclusive, but it excludes the
 								-- last column, not the last line.
-								range = ct.make_comment_range(node_range),
+								range = comment_range,
 								type = ct.comment_actiontype,
 								langtree = languagetree
 							})

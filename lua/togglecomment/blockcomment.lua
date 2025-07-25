@@ -3,6 +3,7 @@ local util = require("togglecomment.util")
 ---@class Togglecomment.BlockcommentDef : Togglecomment.CommentDef
 local BlockcommentDef = {}
 BlockcommentDef.__index = BlockcommentDef
+BlockcommentDef.id = "blockcomment"
 
 function BlockcommentDef.new(begin_str, end_str, placeholder_begin, placeholder_end, comment_query)
 	return setmetatable({

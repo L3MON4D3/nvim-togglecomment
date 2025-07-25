@@ -11,6 +11,7 @@ local LineCommentType = {
 ---@class Togglecomment.LinecommentDef : Togglecomment.CommentDef
 local LinecommentDef = {}
 LinecommentDef.__index = LinecommentDef
+LinecommentDef.id = "linecomment"
 
 function LinecommentDef.new(spacestr, commentstr)
 	local o = {
