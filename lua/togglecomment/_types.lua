@@ -16,6 +16,8 @@
 ---@field pos Togglecomment.ByteColPosition cursor position
 
 ---@class Togglecomment.QueryDef
+---Defines a smallest sub-query (for lack of a better word), which can be
+---validated against any given `vim.treesitter.language.inspect(<lang>)`-info.
 ---@field query string The query-text.
 ---@field fields string[] Fields used in the query.
 ---@field symbols string[] Symbols used in the query.

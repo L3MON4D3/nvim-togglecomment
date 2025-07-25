@@ -1,4 +1,4 @@
-local util = require("togglecomment.util")
+---@alias Togglecomment.LineCommentName "from"|"connect"|"to"|"singleline"
 
 local LineCommentType = {
 	from = 1,
@@ -6,7 +6,7 @@ local LineCommentType = {
 	to = 3,
 	singleline = 4,
 	connect_maybe = 5
-}
+} --[[@as {[Togglecomment.LineCommentName | "connect_maybe"]: any} ]]
 
 ---@class Togglecomment.LinecommentDef : Togglecomment.CommentDef
 local LinecommentDef = {}

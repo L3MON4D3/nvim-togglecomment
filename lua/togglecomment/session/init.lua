@@ -64,6 +64,43 @@ local function validate_queries(lang, query_defs, disabled_queries)
 	end
 end
 
+---@class Togglecomment.Config.LinecommentDef
+---@field prefixes {[string]: string}? Map language to linecomment-string.
+---@field spaces {[Togglecomment.LineCommentName]: string}? The symbol used
+---  after the prefix to denote whether this is the first (from), last (to) or
+---  connecting (connect) line of a comment, or whether this line does not
+---  belong to a multiline comment (singleline).
+
+---@class Togglecomment.Config.BlockcommentLangDef
+---Describes how block-comments can be inserted and detected in any given
+---language.
+---@field [1] string Symbols beginning a block-comment in this language.
+---@field [2] string Symbols ending a block-comment in this language.
+---@field comment_query (string|Togglecomment.QueryDef)? The treesitter-query that
+---  exactly captures a block-comment in this language. If given as a string,
+---  we assume that all symbols and fields that occur in it are compatible with
+---  the current parser for this language, and don't parse it to validate it
+---  further.  
+---  If nil, we default to "((comment) @comment (#trim! @comment 1 1 1 1))",
+---  which works in a surprising number of languages.
+
+---@class Togglecomment.Config.BlockcommentDef
+---@field defs {[string]: Togglecomment.Config.BlockcommentLangDef}? Map a language to
+---  details on how to add/find block-comments in it.
+---@field placeholder_open string? The string that the start of a nested
+---  block-comment is replaced with.
+---@field placeholder_close string? The string that the end of a nested
+---  block-comment is replaced with.
+
+---@class Togglecomment.Config
+---@field linecomment Togglecomment.Config.LinecommentDef? Describes how line-comments
+---  are created and tracked.
+---@field blockcomment Togglecomment.Config.BlockcommentDef? Describes how
+---  block-comments are inserted and detected.
+---@field disabled_plugin_queries {[string]: true|{[string]: true}}? Disable
+---  either all queries for a language (lang = true) or some queries of a
+---  language by name (`{cpp = {for_stmt = true, if_stmt = true}}`).
+
 local default_config = {
 	linecomment = {
 		prefixes = {
@@ -114,8 +151,9 @@ local default_config = {
 		placeholder_open = unicode_symbols.misc_symbols.left_ceiling .. unicode_symbols.spaces.braille_blank,
 		placeholder_close = unicode_symbols.spaces.braille_blank .. unicode_symbols.misc_symbols.right_floor
 	},
+	-- no reason to disable any by default.
 	disabled_plugin_queries = nil
-}
+} --[[@as Togglecomment.Config]]
 
 local default_comment_query_def = {
 	query = "((comment) @comment (#trim! @comment 1 1 1 1))",
@@ -124,6 +162,10 @@ local default_comment_query_def = {
 	anon_symbols = {}
 }
 
+
+
+---Provide new config to nvim-togglecomment.
+---@param config Togglecomment.Config New config, will be merged with defaults.
 function M.setup(config)
 	local lc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "prefixes") or {}, default_config.linecomment.prefixes)
 	local lc_spaces = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "spaces") or {}, default_config.linecomment.spaces)
