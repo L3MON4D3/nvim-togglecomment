@@ -3,6 +3,60 @@ local data = require("togglecomment.session.data")
 local unicode_symbols = require("togglecomment.unicode_symbols")
 local LinecommentDef = require("togglecomment.linecomment").LinecommentDef
 local BlockcommentDef = require("togglecomment.blockcomment").BlockcommentDef
+local util = require("togglecomment.util")
+
+local function validate_queries(lang, query_defs, disabled_queries)
+	local lang_exists, lang_info = pcall(vim.treesitter.language.inspect, lang)
+	if not lang_exists then
+		return nil
+	end
+
+	local query_str = ""
+
+	local valid_fields = util.list_to_set(lang_info.fields)
+	local valid_symbols = lang_info.symbols
+	for query_name, query_def in pairs(query_defs) do
+		if disabled_queries[query_name] then
+			goto continue
+		end
+
+		local parser_compatible = true
+		for _, anon_symbol in ipairs(query_def.anon_symbols) do
+			if valid_symbols[anon_symbol] ~= false then
+				vim.notify("query " .. query_def.query .. " requires anonymous symbol " .. anon_symbol .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				parser_compatible = false
+			end
+		end
+		for _, symbol in ipairs(query_def.symbols) do
+			if valid_symbols[symbol] ~= true then
+				vim.notify("query " .. query_def.query .. " requires symbol " .. symbol .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				parser_compatible = false
+			end
+		end
+		for _, field in ipairs(query_def.fields) do
+			if valid_fields[field] == nil then
+				vim.notify("query " .. query_def.query .. " requires field " .. field .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				parser_compatible = false
+			end
+		end
+
+		if not parser_compatible then
+			vim.notify("query " .. query_def.query .. " is incompatible with the current parser for " .. lang .. ", disabling it.", vim.log.levels.WARN)
+		else
+			query_str = query_str .. query_def.query .. "\n"
+		end
+
+		::continue::
+	end
+
+	local ok, query = pcall(vim.treesitter.query.parse, lang, query_str)
+	if not ok then
+		vim.notify("Error while parsing query: " .. query, vim.log.levels.WARN)
+		return nil
+	else
+		return query
+	end
+end
 
 local default_config = {
 	linecomment = {
@@ -28,25 +82,66 @@ local default_config = {
 	blockcomment = {
 		defs = {
 			lua = { [===[--[=[ ]===], [===[ ]=]]===] },
-			xml = { "<!-- ", " -->", comment_query = "(Comment) @comment"},
+			xml = { "<!-- ", " -->", comment_query_def = {
+				query = "(Comment) @comment",
+				fields = {},
+				symbols = { "Comment" },
+				anon_symbols = {}
+			}},
 			cpp = { "/* ", " */"},
-			markdown = { "<!-- ", " -->", comment_query = "((html_block) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))" },
-			markdown_inline = { "<!-- ", " -->", comment_query = "((html_tag) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))" },
-			html = {"<!-- ", " -->", comment_query = "(comment) @comment"}
+			typst = { "/* ", " */"},
+			markdown = { "<!-- ", " -->", comment_query_def = {
+				query = "((html_block) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))",
+				fields = {},
+				symbols = { "html_block" },
+				anon_symbols = {}
+			}},
+			markdown_inline = { "<!-- ", " -->", comment_query_def = {
+				query = "((html_tag) @comment (#trim! @comment 1 1 1 1) (#match? @comment \"^<!--\"))",
+				fields = {},
+				symbols = { "html_tag" },
+				anon_symbols = {}
+			}},
+			html = {"<!-- ", " -->"}
 		},
 		-- have to have same length.
 		placeholder_open = unicode_symbols.misc_symbols.left_ceiling .. unicode_symbols.spaces.braille_blank,
 		placeholder_close = unicode_symbols.spaces.braille_blank .. unicode_symbols.misc_symbols.right_floor
-	}
+	},
+	disabled_plugin_queries = nil
+}
+
+local default_comment_query_def = {
+	query = "((comment) @comment (#trim! @comment 1 1 1 1))",
+	fields = {},
+	symbols = { "comment" },
+	anon_symbols = {}
 }
 
 function M.setup(config)
 	local lc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "prefixes") or {}, default_config.linecomment.prefixes)
 	local lc_spaces = vim.tbl_extend("keep", vim.tbl_get(config, "linecomment", "spaces") or {}, default_config.linecomment.spaces)
 
-	local bc_prefixes = vim.tbl_extend("keep", vim.tbl_get(config, "blockcomment", "prefixes") or {}, default_config.blockcomment.defs)
+	local user_prefixes = vim.tbl_get(config, "blockcomment", "prefixes") or {}
+	for _, prefixdef in pairs(user_prefixes) do
+		if prefixdef.comment_query then
+			-- we treat a query provided by the user as always compatible with
+			-- their parser.
+			prefixdef.comment_query_def = {
+				query = prefixdef.comment_query,
+				fields = {},
+				symbols = {},
+				anon_symbols = {}
+			}
+			prefixdef.comment_query = nil
+		end
+	end
+
+	local bc_prefixes = vim.tbl_extend("keep", user_prefixes, default_config.blockcomment.defs)
 	local bc_open = vim.tbl_get(config, "blockcomment", "placeholder_open") or default_config.blockcomment.placeholder_open
 	local bc_close = vim.tbl_get(config, "blockcomment", "placeholder_close") or default_config.blockcomment.placeholder_close
+
+	local disabled_queries = config.disabled_plugin_queries or {}
 
 	-- validate
 
@@ -76,9 +171,55 @@ function M.setup(config)
 		return LinecommentDef.new(lc_spaces, commentstring)
 	end, lc_prefixes)
 
-	data.blockcomment_defs = vim.tbl_map(function(commentstrings)
-		return BlockcommentDef.new(commentstrings[1], commentstrings[2], bc_open, bc_close, commentstrings.comment_query or "((comment) @comment (#trim! @comment 1 1 1 1))")
-	end, bc_prefixes)
+	local function build_query(lang)
+		-- all plugin-queries disabled.
+		if disabled_queries[lang] == true then
+			return nil
+		end
+
+		local lang_exists, lang_info = pcall(vim.treesitter.language.inspect, lang)
+		if not lang_exists then
+			return nil
+		end
+
+		local query_modulepath = "togglecomment.queries." .. lang
+		local module_exists, queries = pcall(require, query_modulepath)
+		if not module_exists then
+			return nil
+		end
+
+		return validate_queries(lang, queries, disabled_queries[lang] or {})
+	end
+
+	-- these two emit logs for unsupported languages and generally do a bit of
+	-- work (and also need all parsers to be loaded, which, if the parsers are
+	-- lazy-loaded somehow, may not be the case if this is executed).
+	-- Therefore, only load them when actually requested, lazily, and not
+	-- eagerly on `setup`.
+	data.queries = setmetatable({}, {
+		__index = function(t,k)
+			local query = build_query(k)
+			-- set false for missing query, so we don't have to redo the
+			-- checks for determining if the query or parser exists.
+			rawset(t, k, vim.F.if_nil(query, false))
+			return query
+		end
+	})
+
+	data.blockcomment_defs = setmetatable({}, {
+		__index = function(t,k)
+			local bc_def = bc_prefixes[k]
+			local bc_query = validate_queries(k, {comment = bc_def.comment_query_def or default_comment_query_def}, {})
+			if bc_query then
+				local res = BlockcommentDef.new(bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
+				rawset(t,k,res)
+				return res
+			else
+				rawset(t,k,false)
+				return false
+			end
+		end
+	})
 end
 
 -- set default values.

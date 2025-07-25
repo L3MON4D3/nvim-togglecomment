@@ -15,3 +15,8 @@
 ---@field buffer_lines ToggleComment.LazyContiguousLinerange
 ---@field pos Togglecomment.ByteColPosition cursor position
 
+---@class Togglecomment.QueryDef
+---@field query string The query-text.
+---@field fields string[] Fields used in the query.
+---@field symbols string[] Symbols used in the query.
+---@field anon_symbols string[] Anonymous symbols used in the query.

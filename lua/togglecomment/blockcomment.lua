@@ -97,7 +97,7 @@ function BlockcommentDef:get_comment_range(opts)
 	-- apparently parses all nodes covering the position :)
 	langtree:parse({pos[1], pos[2], pos[1], pos[2]+1})
 
-	local query = vim.treesitter.query.parse(langtree:lang(), self.comment_query)
+	local query = self.comment_query
 	local cursor_tree = util.tree_for_range(langtree, util.range_from_endpoints(pos, pos), buffer_lines)
 
 	local comments_in_comment_range = {}
@@ -137,7 +137,7 @@ function BlockcommentDef:comment(range, opts)
 		error("Unexpected: Could not find tree for requested range!")
 	end
 
-	local query = vim.treesitter.query.parse(langtree:lang(), self.comment_query)
+	local query = self.comment_query
 
 	local comments_in_comment_range = {}
 	for _, _, metadata in query:iter_matches(cursor_tree:root(), 0, range[1], range[3]+1) do

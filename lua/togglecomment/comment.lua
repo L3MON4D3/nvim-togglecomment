@@ -286,51 +286,57 @@ return function()
 			end
 
 			-- look for commentable ranges.
-
-			local query = vim.treesitter.query.get(lang, "togglecomment")
-			if query == nil then
-				goto continue;
-			end
-
-			-- only find matches that include the cursor-line.
-			for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
-				-- prefer range set via metadata, it has to be set explicitly,
-				-- so probably only exists if there was some extra effort to enable it.
-				local node_range = metadata.togglecomment
-				if not node_range then
-					for id, nodes in pairs(match) do
-						local name = query.captures[id]
-						if name == "togglecomment" then
-							-- set this way by #trim!.
-							node_range = metadata[id] and metadata[id].range
-							if not node_range then
-								node_range = {nodes[1]:range(false)}
+			local function handle_query(query)
+				-- only find matches that include the cursor-line.
+				for _, match, metadata in query:iter_matches(cursor_tree:root(), 0, cursor[1], cursor[1]+1) do
+					-- prefer range set via metadata, it has to be set explicitly,
+					-- so probably only exists if there was some extra effort to enable it.
+					local node_range = metadata.togglecomment
+					if not node_range then
+						for id, nodes in pairs(match) do
+							local name = query.captures[id]
+							if name == "togglecomment" then
+								-- set this way by #trim!.
+								node_range = metadata[id] and metadata[id].range
+								if not node_range then
+									node_range = {nodes[1]:range(false)}
+								end
+								break
 							end
+						end
+					end
+
+					for _, ct in ipairs(commenttypes) do
+						local cursor_check_range = ct.make_cursor_check_range(node_range)
+						if
+							util.range_includes_pos(cursor_check_range, cursor) and
+							ct.commenttype_valid_range(node_range) then
+
+							selector.record({
+								comment_def = ct.comment_def,
+								-- node_range is end-exclusive, but it excludes the
+								-- last column, not the last line.
+								range = ct.make_comment_range(node_range),
+								type = ct.comment_actiontype,
+								langtree = languagetree
+							})
+							-- once we have found a fitting commenttype for this
+							-- match, don't insert it again.
 							break
 						end
 					end
 				end
-
-				for _, ct in ipairs(commenttypes) do
-					local cursor_check_range = ct.make_cursor_check_range(node_range)
-					if
-						util.range_includes_pos(cursor_check_range, cursor) and
-						ct.commenttype_valid_range(node_range) then
-
-						selector.record({
-							comment_def = ct.comment_def,
-							-- node_range is end-exclusive, but it excludes the
-							-- last column, not the last line.
-							range = ct.make_comment_range(node_range),
-							type = ct.comment_actiontype,
-							langtree = languagetree
-						})
-						-- once we have found a fitting commenttype for this
-						-- match, don't insert it again.
-						break
-					end
-				end
 			end
+
+			local user_query = vim.treesitter.query.get(lang, "togglecomment")
+			local plugin_query = data.queries[lang]
+			if user_query then
+				handle_query(user_query)
+			end
+			if plugin_query then
+				handle_query(plugin_query)
+			end
+
 			::continue::
 		end
 

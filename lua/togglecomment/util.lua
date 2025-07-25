@@ -177,4 +177,26 @@ function M.langtrees_for_range(langtree, range, buffer_lines)
 	return res
 end
 
+function M.lazy_table(lazy_t, lazy_defs)
+	return setmetatable(lazy_t, {
+		__index = function(t, k)
+			local v = lazy_defs[k]
+			if v then
+				local v_resolved = v()
+				rawset(t, k, v_resolved)
+				return v_resolved
+			end
+			return nil
+		end,
+	})
+end
+
+function M.list_to_set(list)
+	local res = {}
+	for _, v in ipairs(list) do
+		res[v] = true
+	end
+	return res
+end
+
 return M
