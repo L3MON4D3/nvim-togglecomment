@@ -127,3 +127,11 @@ and allows creating ranges from endpoints of captured nodes.
 
    to comment numbers (nonsensical, but if it wasn't, it'd already be included
    by default :P)
+
+# Project State
+I'm using this daily, but since that is a sample size of 1, approach this with
+some care and don't be too surprised in case something breaks.  
+This project adheres to semver, but is still pre v1.0, so check the issue on
+[breaking changes](https://github.com/L3MON4D3/nvim-togglecomment/issues/1)
+before updating. Once this withstood some real-world usage by people other than
+me, and has some tests, I'll tag a 1.0-release.
