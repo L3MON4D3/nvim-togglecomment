@@ -82,6 +82,17 @@ end
 
 return function()
 	local mode = vim.fn.mode()
+
+	-- get top-level parser.
+	local has_parser, root_parser = pcall(vim.treesitter.get_parser, 0)
+	if not has_parser then
+		vim.notify("Could not get parser: " .. root_parser, vim.log.levels.ERROR)
+		return
+	end
+
+	assert(root_parser)
+	root_parser:parse()
+
 	if mode:sub(1,1):lower() == "v" then
 		local getpos_dot = vim.fn.getpos(".")
 		local getpos_v = vim.fn.getpos("v")
@@ -111,12 +122,6 @@ return function()
 		-- range should exclude the last char.
 		local range = util.range_from_endpoints(from, to)
 
-		local root_parser = vim.treesitter.get_parser(0)
-		if not root_parser then
-			error("Could not get parser!")
-		end
-
-		root_parser:parse()
 		-- for line-comments, the innermost tree should be the one we want to comment:
 		-- It does not make sense to comment out part of a vim.cmd, for example:
 		-- ```lua
@@ -185,13 +190,6 @@ return function()
 			set_continuing_action(continue_action)
 			return
 		end
-
-		-- get top-level parser.
-		local root_parser = vim.treesitter.get_parser(0)
-		if not root_parser then
-			error("Could not get parser!")
-		end
-		root_parser:parse()
 
 		local selector = range_selectors.sorted()
 		local cursor_range = util.range_from_endpoints(cursor, cursor)
