@@ -3,6 +3,7 @@ local contiguous_linerange = require("togglecomment.contiguous_linerange")
 local range_selectors = require("togglecomment.range_selectors")
 local data = require("togglecomment.session.data")
 local log = require("togglecomment.util.log").new("comment")
+local notify = require("togglecomment.util.notify")
 
 ---@enum Togglecomment.ActionType
 local ActionTypes = {
@@ -87,7 +88,7 @@ return function()
 	-- get top-level parser.
 	local has_parser, root_parser = pcall(vim.treesitter.get_parser, 0)
 	if not has_parser then
-		vim.notify("Could not get parser: " .. root_parser, vim.log.levels.ERROR)
+		notify.error("Could not get parser: %s", root_parser)
 		return
 	end
 
@@ -160,7 +161,7 @@ return function()
 			comment_def = blockcomment_def
 		end
 		if not comment_def then
-			vim.notify("Cannot toggle comments for filetype " .. lang, vim.log.levels.WARN)
+			notify.warn("Cannot toggle comments for filetype %s", lang)
 			return
 		end
 
@@ -365,7 +366,7 @@ return function()
 		end, selector.retrieve())
 
 		if #actions_range_sorted == 0 then
-			vim.notify("No toggleable node at cursor.", vim.log.levels.WARN)
+			notify.warn("No toggleable node at cursor.")
 			return
 		end
 

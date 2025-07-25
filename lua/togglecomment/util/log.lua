@@ -1,4 +1,5 @@
 local util = require("togglecomment.util")
+local notify require("togglecomment.util.notify")
 
 -- older neovim-versions (even 0.7.2) do not have stdpath("log").
 local logpath = vim.fn.stdpath("log")
@@ -21,11 +22,8 @@ local log_fd = vim.loop.fs_open(
 local log_line_append
 if not log_fd then
 	-- print a warning
-	vim.notify(
-		("Togglecomment: could not open log at %s. Not logging for this session."):format(
-			log_location
-		),
-		vim.log.levels.WARN
+	notify.warn(
+		"Togglecomment: could not open log at %s. Not logging for this session.", log_location
 	)
 	-- make log_line_append do nothing.
 	log_line_append = util.nop

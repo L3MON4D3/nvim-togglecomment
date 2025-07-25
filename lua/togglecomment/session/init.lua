@@ -4,6 +4,7 @@ local unicode_symbols = require("togglecomment.unicode_symbols")
 local LinecommentDef = require("togglecomment.linecomment").LinecommentDef
 local BlockcommentDef = require("togglecomment.blockcomment").BlockcommentDef
 local util = require("togglecomment.util")
+local notify = require("togglecomment.util.notify")
 
 local function validate_queries(lang, query_defs, disabled_queries)
 	local lang_exists, lang_info = pcall(vim.treesitter.language.inspect, lang)
@@ -23,25 +24,25 @@ local function validate_queries(lang, query_defs, disabled_queries)
 		local parser_compatible = true
 		for _, anon_symbol in ipairs(query_def.anon_symbols) do
 			if valid_symbols[anon_symbol] ~= false then
-				vim.notify("query " .. query_def.query .. " requires anonymous symbol " .. anon_symbol .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				notify.warn("query %s requires anonymous symbol %s which is not provided by the parser for %s.", query_def.query, anon_symbol, lang)
 				parser_compatible = false
 			end
 		end
 		for _, symbol in ipairs(query_def.symbols) do
 			if valid_symbols[symbol] ~= true then
-				vim.notify("query " .. query_def.query .. " requires symbol " .. symbol .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				notify.warn("query %s requires symbol %s which is not provided by the parser for %s.", query_def.query, symbol, lang)
 				parser_compatible = false
 			end
 		end
 		for _, field in ipairs(query_def.fields) do
 			if valid_fields[field] == nil then
-				vim.notify("query " .. query_def.query .. " requires field " .. field .. " which is not provided by the parser for " .. lang .. ".", vim.log.levels.WARN)
+				notify.warn("query %s requires field %s which is not provided by the parser for %s.", query_def.query, field, lang)
 				parser_compatible = false
 			end
 		end
 
 		if not parser_compatible then
-			vim.notify("query " .. query_def.query .. " is incompatible with the current parser for " .. lang .. ", disabling it.", vim.log.levels.WARN)
+			notify.warn("query %s is incompatible with the current parser for parser for %s, disabling it.", query_def.query, lang)
 		else
 			table.insert(valid_queries, ([[
 				(
@@ -56,7 +57,7 @@ local function validate_queries(lang, query_defs, disabled_queries)
 
 	local ok, query = pcall(vim.treesitter.query.parse, lang, table.concat(valid_queries, "\n"))
 	if not ok then
-		vim.notify("Error while parsing query: " .. query, vim.log.levels.WARN)
+		notify.warn("Error while parsing query: %s", query)
 		return nil
 	else
 		return query
