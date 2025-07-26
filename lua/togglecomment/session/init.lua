@@ -251,15 +251,22 @@ function M.setup(config)
 	data.blockcomment_defs = setmetatable({}, {
 		__index = function(t,k)
 			local bc_def = bc_defs[k]
+
+			local errmsg
 			if bc_def then
 				local bc_query = validate_queries(k, {comment = bc_def.comment_query or default_comment_query_def}, {})
-				if bc_query then
-					local res = BlockcommentDef.new(bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
+				local ok, res = pcall(BlockcommentDef.new, bc_def[1], bc_def[2], bc_open, bc_close, bc_query)
+				if ok then
 					rawset(t,k,res)
 					return res
+				else
+					errmsg = "Error while creating blockcomment-definition for language " .. k .. ": " .. res
 				end
+			else
+				errmsg = "Missing blockcomment-definition for language " .. k
 			end
 
+			notify.error(errmsg)
 			rawset(t,k,false)
 			return false
 		end

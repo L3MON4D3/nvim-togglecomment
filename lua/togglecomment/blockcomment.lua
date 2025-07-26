@@ -6,6 +6,12 @@ BlockcommentDef.__index = BlockcommentDef
 BlockcommentDef.id = "blockcomment"
 
 function BlockcommentDef.new(begin_str, end_str, placeholder_begin, placeholder_end, comment_query)
+	vim.validate("blockcomment_begin", begin_str, {"string"})
+	vim.validate("blockcomment_end", end_str, {"string"})
+	vim.validate("placeholder_begin", placeholder_begin, {"string"})
+	vim.validate("placeholder_end", placeholder_end, {"string"})
+	vim.validate("comment_query", comment_query, {"table"})
+
 	return setmetatable({
 		block_begin = begin_str,
 		block_end = end_str,
