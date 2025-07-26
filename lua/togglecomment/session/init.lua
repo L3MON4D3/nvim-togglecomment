@@ -184,7 +184,7 @@ function M.setup(config)
 		end
 	end
 
-	local bc_prefixes = vim.tbl_extend("keep", user_prefixes, default_config.blockcomment.defs)
+	local bc_defs = vim.tbl_extend("keep", user_prefixes, default_config.blockcomment.defs)
 	local bc_open = vim.tbl_get(config, "blockcomment", "placeholder_open") or default_config.blockcomment.placeholder_open
 	local bc_close = vim.tbl_get(config, "blockcomment", "placeholder_close") or default_config.blockcomment.placeholder_close
 
@@ -250,7 +250,7 @@ function M.setup(config)
 
 	data.blockcomment_defs = setmetatable({}, {
 		__index = function(t,k)
-			local bc_def = bc_prefixes[k]
+			local bc_def = bc_defs[k]
 			if bc_def then
 				local bc_query = validate_queries(k, {comment = bc_def.comment_query or default_comment_query_def}, {})
 				if bc_query then
