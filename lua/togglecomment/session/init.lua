@@ -224,11 +224,6 @@ function M.setup(config)
 			return nil
 		end
 
-		local lang_exists, lang_info = pcall(vim.treesitter.language.inspect, lang)
-		if not lang_exists then
-			return nil
-		end
-
 		local query_modulepath = "togglecomment.queries." .. lang
 		local module_exists, queries = pcall(require, query_modulepath)
 		if not module_exists then
